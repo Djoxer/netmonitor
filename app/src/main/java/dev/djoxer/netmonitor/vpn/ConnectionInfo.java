@@ -2,20 +2,23 @@ package dev.djoxer.netmonitor.vpn;
 
 public class ConnectionInfo {
 
-    public final String protocol;   // TCP / UDP
+    public final String protocol;
     public final String destIp;
     public final int destPort;
     public final long timestamp;
-    public int packetCount;
-    public long bytes;
+
+    public int uid = -1;
+    public String packageName = null;
+    public String appName = null;
+
+    public int packetCount = 1;
+    public long bytes = 0;
 
     public ConnectionInfo(String protocol, String destIp, int destPort) {
         this.protocol = protocol;
         this.destIp = destIp;
         this.destPort = destPort;
         this.timestamp = System.currentTimeMillis();
-        this.packetCount = 1;
-        this.bytes = 0;
     }
 
     public String getKey() {
@@ -24,7 +27,18 @@ public class ConnectionInfo {
 
     @Override
     public String toString() {
-        return protocol + "  " + destIp + ":" + destPort +
-                "  (" + packetCount + " pkts, " + bytes + " B)";
+        String appPart;
+        if (appName != null) {
+            appPart = appName;
+        } else if (packageName != null) {
+            appPart = packageName;
+        } else if (uid > 0) {
+            appPart = "uid:" + uid;
+        } else {
+            appPart = "unknown";
+        }
+
+        return appPart + "  →  " + protocol + " " + destIp + ":" + destPort +
+                "  (" + packetCount + " pkts)";
     }
 }

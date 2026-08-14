@@ -9,8 +9,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import java.util.List;
@@ -24,8 +26,11 @@ public class MainActivity extends Activity {
 
     private TextView statusView;
     private TextView connectionsView;
+    private Switch blockSwitch;
     private Handler handler = new Handler(Looper.getMainLooper());
     private Runnable refreshRunnable;
+
+    private boolean pendingBlockMode = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,6 +54,23 @@ public class MainActivity extends Activity {
         statusView.setPadding(0, 0, 0, 16);
         root.addView(statusView);
 
+        // Block mode switch
+        LinearLayout switchRow = new LinearLayout(this);
+        switchRow.setOrientation(LinearLayout.HORIZONTAL);
+        switchRow.setPadding(0, 0, 0, 16);
+
+        TextView switchLabel = new TextView(this);
+        switchLabel.setText("Block mode (no internet)");
+        switchLabel.setTextColor(Color.LTGRAY);
+        switchLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        switchRow.addView(switchLabel);
+
+        blockSwitch = new Switch(this);
+        blockSwitch.setPadding(24, 0, 0, 0);
+        switchRow.addView(blockSwitch);
+        root.addView(switchRow);
+
+        // Buttons
         LinearLayout buttons = new LinearLayout(this);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
 
@@ -84,7 +106,6 @@ public class MainActivity extends Activity {
 
         setContentView(root);
 
-        // Auto-refresh every 1.5 seconds
         refreshRunnable = new Runnable() {
             @Override
             public void run() {
@@ -96,23 +117,27 @@ public class MainActivity extends Activity {
     }
 
     private void updateConnectionsList() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("UDP forwarded: ").append(NetVpnService.udpForwarded.get())
+                .append("   |   TCP seen: ").append(NetVpnService.tcpSeen.get())
+                .append("   |   UDP sessions: ").append(NetVpnService.getLiveUdpSessions())
+                .append("\n\n");
+
         List<ConnectionInfo> list = NetVpnService.getConnections();
         if (list.isEmpty()) {
-            connectionsView.setText("No connections yet.\nStart monitoring and use some apps.");
-            return;
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Connections (").append(list.size()).append("):\n\n");
-
-        // Show newest first (LinkedHashMap access-order)
-        for (int i = list.size() - 1; i >= 0; i--) {
-            sb.append(list.get(i).toString()).append("\n");
+            sb.append("No connections yet.");
+        } else {
+            sb.append("Connections (").append(list.size()).append("):\n\n");
+            for (int i = list.size() - 1; i >= 0; i--) {
+                sb.append(list.get(i).toString()).append("\n");
+            }
         }
         connectionsView.setText(sb.toString());
     }
 
     private void prepareAndStartVpn() {
+        pendingBlockMode = blockSwitch.isChecked();
         Intent prepare = VpnService.prepare(this);
         if (prepare != null) {
             startActivityForResult(prepare, REQUEST_VPN);
@@ -124,9 +149,16 @@ public class MainActivity extends Activity {
     private void startVpnService() {
         Intent intent = new Intent(this, NetVpnService.class);
         intent.setAction(NetVpnService.ACTION_START);
+        intent.putExtra(NetVpnService.EXTRA_BLOCK_MODE, pendingBlockMode);
         startForegroundService(intent);
-        statusView.setText("Status: running");
-        statusView.setTextColor(Color.parseColor("#4CAF50"));
+
+        if (pendingBlockMode) {
+            statusView.setText("Status: BLOCK mode (no internet)");
+            statusView.setTextColor(Color.parseColor("#FF5722"));
+        } else {
+            statusView.setText("Status: FORWARD mode (UDP only for now)");
+            statusView.setTextColor(Color.parseColor("#4CAF50"));
+        }
     }
 
     private void stopVpn() {
