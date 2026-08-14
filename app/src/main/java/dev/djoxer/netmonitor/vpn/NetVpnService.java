@@ -13,16 +13,15 @@ import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
 import dev.djoxer.netmonitor.MainActivity;
-import dev.djoxer.netmonitor.R;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
-/**
- * Local VPN service that captures all device traffic.
- * This is the non-root foundation of NetMonitor.
- */
 public class NetVpnService extends VpnService {
 
     private static final String TAG = "NetVpnService";
@@ -35,6 +34,26 @@ public class NetVpnService extends VpnService {
     private ParcelFileDescriptor vpnInterface = null;
     private Thread captureThread = null;
     private volatile boolean running = false;
+
+    // Simple connection tracker (max 200 entries)
+    private static final Map<String, ConnectionInfo> connections = new LinkedHashMap<>(200, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, ConnectionInfo> eldest) {
+            return size() > 200;
+        }
+    };
+
+    public static List<ConnectionInfo> getConnections() {
+        synchronized (connections) {
+            return new ArrayList<>(connections.values());
+        }
+    }
+
+    public static void clearConnections() {
+        synchronized (connections) {
+            connections.clear();
+        }
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -56,22 +75,13 @@ public class NetVpnService extends VpnService {
             Builder builder = new Builder();
             builder.setSession("NetMonitor");
             builder.setMtu(1500);
-
-            // Local address for the TUN interface
             builder.addAddress("10.0.0.2", 32);
-
-            // Route all traffic through us
             builder.addRoute("0.0.0.0", 0);
-
-            // Optional: DNS
             builder.addDnsServer("8.8.8.8");
             builder.addDnsServer("1.1.1.1");
-
-            // Important: allow the app itself to still have network
             builder.addDisallowedApplication(getPackageName());
 
             vpnInterface = builder.establish();
-
             if (vpnInterface == null) {
                 Log.e(TAG, "Failed to establish VPN interface");
                 stopSelf();
@@ -79,13 +89,12 @@ public class NetVpnService extends VpnService {
             }
 
             running = true;
-            updateNotification("VPN running – monitoring traffic");
+            updateNotification("Monitoring traffic...");
 
-            // Start a simple capture loop (for now just keeps the tunnel alive)
             captureThread = new Thread(this::captureLoop, "NetMonitor-Capture");
             captureThread.start();
 
-            Log.i(TAG, "VPN started successfully");
+            Log.i(TAG, "VPN started");
 
         } catch (Exception e) {
             Log.e(TAG, "Error starting VPN", e);
@@ -95,52 +104,83 @@ public class NetVpnService extends VpnService {
     }
 
     private void captureLoop() {
-        if (vpnInterface == null) return;
-
         FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
         FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor());
         ByteBuffer packet = ByteBuffer.allocate(32767);
 
         try {
             while (running) {
-                // Read packet from TUN
                 int length = in.read(packet.array());
                 if (length > 0) {
-                    // For now we just write it back (passthrough)
-                    // Later we will parse and log connections here
+                    parsePacket(packet.array(), length);
+                    // Passthrough
                     out.write(packet.array(), 0, length);
                 }
                 packet.clear();
             }
         } catch (Exception e) {
-            if (running) {
-                Log.e(TAG, "Capture loop error", e);
-            }
+            if (running) Log.e(TAG, "Capture error", e);
         } finally {
             try { in.close(); } catch (Exception ignored) {}
             try { out.close(); } catch (Exception ignored) {}
         }
     }
 
+    private void parsePacket(byte[] data, int length) {
+        if (length < 20) return; // too short for IP header
+
+        // IP version
+        int version = (data[0] >> 4) & 0x0F;
+        if (version != 4) return; // only IPv4 for now
+
+        int headerLength = (data[0] & 0x0F) * 4;
+        if (length < headerLength) return;
+
+        int protocol = data[9] & 0xFF;
+        String protoName;
+        if (protocol == 6) protoName = "TCP";
+        else if (protocol == 17) protoName = "UDP";
+        else return; // ignore others for now
+
+        // Destination IP (bytes 16-19)
+        String destIp = (data[16] & 0xFF) + "." +
+                (data[17] & 0xFF) + "." +
+                (data[18] & 0xFF) + "." +
+                (data[19] & 0xFF);
+
+        int destPort = 0;
+        if (length >= headerLength + 4) {
+            destPort = ((data[headerLength + 2] & 0xFF) << 8) |
+                    (data[headerLength + 3] & 0xFF);
+        }
+
+        // Ignore local / invalid
+        if (destIp.startsWith("10.0.0.") || destPort == 0) return;
+
+        String key = protoName + "|" + destIp + "|" + destPort;
+
+        synchronized (connections) {
+            ConnectionInfo info = connections.get(key);
+            if (info == null) {
+                info = new ConnectionInfo(protoName, destIp, destPort);
+                connections.put(key, info);
+            } else {
+                info.packetCount++;
+            }
+            info.bytes += length;
+        }
+    }
+
     private void stopVpn() {
         running = false;
-
         if (captureThread != null) {
-            try {
-                captureThread.join(1000);
-            } catch (InterruptedException ignored) {}
+            try { captureThread.join(1000); } catch (InterruptedException ignored) {}
             captureThread = null;
         }
-
         if (vpnInterface != null) {
-            try {
-                vpnInterface.close();
-            } catch (Exception e) {
-                Log.e(TAG, "Error closing VPN interface", e);
-            }
+            try { vpnInterface.close(); } catch (Exception ignored) {}
             vpnInterface = null;
         }
-
         Log.i(TAG, "VPN stopped");
     }
 
@@ -177,19 +217,9 @@ public class NetVpnService extends VpnService {
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "NetMonitor VPN",
-                    NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("Shows when traffic monitoring is active");
+                    CHANNEL_ID, "NetMonitor VPN", NotificationManager.IMPORTANCE_LOW);
             NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) {
-                nm.createNotificationChannel(channel);
-            }
+            if (nm != null) nm.createNotificationChannel(channel);
         }
-    }
-
-    public static boolean isRunning() {
-        // Simple static flag – later we can improve this
-        return false; // will be improved
     }
 }
