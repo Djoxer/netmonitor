@@ -12,8 +12,8 @@ android {
         applicationId = "dev.djoxer.netmonitor"
         minSdk = 30
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 4
+        versionName = "0.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

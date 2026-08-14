@@ -18,6 +18,7 @@ import android.widget.TextView;
 import java.util.List;
 
 import dev.djoxer.netmonitor.vpn.ConnectionInfo;
+import dev.djoxer.netmonitor.vpn.ConnectionTracker;
 import dev.djoxer.netmonitor.vpn.NetVpnService;
 
 public class MainActivity extends Activity {
@@ -119,16 +120,15 @@ public class MainActivity extends Activity {
     private void updateConnectionsList() {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("UDP fwd: ").append(NetVpnService.udpForwarded.get())
-                .append(" | TCP fwd: ").append(NetVpnService.tcpForwarded.get())
-                .append(" | ClientPayloads: ").append(NetVpnService.tcpClientPayloads.get())
+        ConnectionTracker t = NetVpnService.getTracker();
+
+        sb.append("UDP fwd: ").append(t.udpForwarded.get())
+                .append(" | TCP fwd: ").append(t.tcpForwarded.get())
+                .append(" | ClientPayloads: ").append(t.tcpClientPayloads.get())
                 .append("\n")
-                .append("SYN: ").append(NetVpnService.tcpSynSeen.get())
-                .append(" | Sessions: ").append(NetVpnService.tcpSessionsCreated.get())
-                .append(" | ConnectErr: ").append(NetVpnService.tcpConnectErrors.get())
-                .append("\n")
-                .append("Live UDP: ").append(NetVpnService.getLiveUdpSessions())
-                .append(" | Live TCP: ").append(NetVpnService.getLiveTcpSessions())
+                .append("SYN: ").append(t.tcpSynSeen.get())
+                .append(" | Sessions: ").append(t.tcpSessionsCreated.get())
+                .append(" | ConnectErr: ").append(t.tcpConnectErrors.get())
                 .append("\n\n");
 
         List<ConnectionInfo> list = NetVpnService.getConnections();
