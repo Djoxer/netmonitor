@@ -4,6 +4,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.system.OsConstants;
+import android.util.Log;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -14,6 +15,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class ConnectionTracker {
+
+    private static final String TAG = "ConnectionTracker";
 
     public final AtomicLong udpForwarded = new AtomicLong(0);
     public final AtomicLong tcpForwarded = new AtomicLong(0);
@@ -27,10 +30,10 @@ public class ConnectionTracker {
     private final Map<Integer, String> uidToPackage = new HashMap<>();
     private final Map<Integer, String> uidToAppName = new HashMap<>();
 
-    private final Map<String, ConnectionInfo> connections = new LinkedHashMap<>(400, 0.75f, true) {
+    private final Map<String, ConnectionInfo> connections = new LinkedHashMap<>(500, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, ConnectionInfo> eldest) {
-            return size() > 400;
+            return size() > 500;
         }
     };
 
@@ -93,18 +96,22 @@ public class ConnectionTracker {
                 (data[18] & 0xFF) + "." + (data[19] & 0xFF);
         int destPort = ((data[headerLength + 2] & 0xFF) << 8) | (data[headerLength + 3] & 0xFF);
 
-        if (destIp.startsWith("10.0.0.") || destPort == 0) return;
+        if (destIp.startsWith("10.0.0.") || destPort == 0 || srcPort == 0) return;
 
-        String key = protoName + "|" + destIp + "|" + destPort;
+        String key = protoName + "|" + srcPort + "|" + destIp + "|" + destPort;
 
         synchronized (connections) {
             ConnectionInfo info = connections.get(key);
             if (info == null) {
-                info = new ConnectionInfo(protoName, destIp, destPort);
+                info = new ConnectionInfo(protoName, destIp, destPort, srcPort);
                 connections.put(key, info);
                 resolveUid(info, osProto, srcIp, srcPort, destIp, destPort);
             } else {
                 info.packetCount++;
+                // retry resolution once if still unknown
+                if (info.uid <= 0) {
+                    resolveUid(info, osProto, srcIp, srcPort, destIp, destPort);
+                }
             }
             info.bytes += length;
         }
@@ -114,16 +121,31 @@ public class ConnectionTracker {
                             String localIp, int localPort,
                             String remoteIp, int remotePort) {
         if (connectivityManager == null) return;
+
+        int uid = lookupOwnerUid(protocol, localIp, localPort, remoteIp, remotePort);
+
+        // Sometimes the API wants the endpoints swapped depending on direction
+        if (uid <= 0 || uid == android.os.Process.INVALID_UID) {
+            uid = lookupOwnerUid(protocol, remoteIp, remotePort, localIp, localPort);
+        }
+
+        if (uid > 0 && uid != android.os.Process.INVALID_UID) {
+            info.uid = uid;
+            resolvePackage(info, uid);
+        }
+    }
+
+    private int lookupOwnerUid(int protocol,
+                               String localIp, int localPort,
+                               String remoteIp, int remotePort) {
         try {
-            int uid = connectivityManager.getConnectionOwnerUid(
+            return connectivityManager.getConnectionOwnerUid(
                     protocol,
                     new InetSocketAddress(localIp, localPort),
                     new InetSocketAddress(remoteIp, remotePort));
-            if (uid > 0 && uid != android.os.Process.INVALID_UID) {
-                info.uid = uid;
-                resolvePackage(info, uid);
-            }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            return -1;
+        }
     }
 
     private void resolvePackage(ConnectionInfo info, int uid) {
@@ -133,22 +155,38 @@ public class ConnectionTracker {
             return;
         }
         if (packageManager == null) return;
+
         try {
             String[] packages = packageManager.getPackagesForUid(uid);
-            if (packages != null && packages.length > 0) {
-                String pkg = packages[0];
-                info.packageName = pkg;
-                uidToPackage.put(uid, pkg);
-                try {
-                    ApplicationInfo ai = packageManager.getApplicationInfo(pkg, 0);
-                    String name = packageManager.getApplicationLabel(ai).toString();
-                    info.appName = name;
-                    uidToAppName.put(uid, name);
-                } catch (Exception e) {
-                    info.appName = pkg;
-                    uidToAppName.put(uid, pkg);
+            if (packages == null || packages.length == 0) {
+                // system / isolated uid without package
+                info.appName = null;
+                return;
+            }
+
+            // Prefer a non-system-looking package if multiple share the UID
+            String chosen = packages[0];
+            for (String pkg : packages) {
+                if (!pkg.startsWith("android.") && !pkg.startsWith("com.android.")) {
+                    chosen = pkg;
+                    break;
                 }
             }
-        } catch (Exception ignored) {}
+
+            info.packageName = chosen;
+            uidToPackage.put(uid, chosen);
+
+            try {
+                ApplicationInfo ai = packageManager.getApplicationInfo(chosen, 0);
+                String label = packageManager.getApplicationLabel(ai).toString();
+                info.appName = label;
+                uidToAppName.put(uid, label);
+            } catch (Exception e) {
+                info.appName = chosen;
+                uidToAppName.put(uid, chosen);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "resolvePackage failed for uid " + uid, e);
+        }
     }
 }

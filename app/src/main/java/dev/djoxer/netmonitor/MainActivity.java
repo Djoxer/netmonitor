@@ -2,6 +2,7 @@ package dev.djoxer.netmonitor;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.graphics.Color;
 import android.net.VpnService;
 import android.os.Bundle;
@@ -9,7 +10,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -42,8 +42,9 @@ public class MainActivity extends Activity {
         root.setPadding(32, 32, 32, 32);
         root.setBackgroundColor(Color.parseColor("#121212"));
 
+        // Title + version
         TextView title = new TextView(this);
-        title.setText("NetMonitor");
+        title.setText("NetMonitor  v" + getAppVersion());
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
         title.setTextColor(Color.WHITE);
         title.setPadding(0, 0, 0, 16);
@@ -117,9 +118,17 @@ public class MainActivity extends Activity {
         handler.post(refreshRunnable);
     }
 
+    private String getAppVersion() {
+        try {
+            PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return pInfo.versionName != null ? pInfo.versionName : "?";
+        } catch (Exception e) {
+            return "?";
+        }
+    }
+
     private void updateConnectionsList() {
         StringBuilder sb = new StringBuilder();
-
         ConnectionTracker t = NetVpnService.getTracker();
 
         sb.append("UDP fwd: ").append(t.udpForwarded.get())
@@ -163,7 +172,7 @@ public class MainActivity extends Activity {
             statusView.setText("Status: BLOCK mode (no internet)");
             statusView.setTextColor(Color.parseColor("#FF5722"));
         } else {
-            statusView.setText("Status: FORWARD mode (UDP only for now)");
+            statusView.setText("Status: FORWARD mode (UDP+TCP)");
             statusView.setTextColor(Color.parseColor("#4CAF50"));
         }
     }
