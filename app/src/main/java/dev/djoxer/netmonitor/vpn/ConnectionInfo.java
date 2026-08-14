@@ -11,6 +11,7 @@ public class ConnectionInfo {
     public int uid = -1;
     public String packageName = null;
     public String appName = null;
+    public String hostname = null;
 
     public int packetCount = 1;
     public long bytes = 0;
@@ -40,7 +41,11 @@ public class ConnectionInfo {
             appPart = "unknown";
         }
 
-        return appPart + "  →  " + protocol + " " + destIp + ":" + destPort +
+        String dest = (hostname != null && !hostname.isEmpty())
+                ? hostname
+                : destIp;
+
+        return appPart + "  →  " + protocol + " " + dest + ":" + destPort +
                 "  (" + packetCount + " pkts, " + formatBytes(bytes) + ")";
     }
 

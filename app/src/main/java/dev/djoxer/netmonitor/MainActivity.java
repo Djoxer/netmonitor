@@ -138,6 +138,7 @@ public class MainActivity extends Activity {
                 .append("SYN: ").append(t.tcpSynSeen.get())
                 .append(" | Sessions: ").append(t.tcpSessionsCreated.get())
                 .append(" | ConnectErr: ").append(t.tcpConnectErrors.get())
+                .append(" | Hosts: ").append(t.getHostnameResolver().size())
                 .append("\n\n");
 
         List<ConnectionInfo> list = NetVpnService.getConnections();

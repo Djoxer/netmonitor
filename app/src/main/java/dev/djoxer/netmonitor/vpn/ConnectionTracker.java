@@ -39,10 +39,15 @@ public class ConnectionTracker {
 
     private ConnectivityManager connectivityManager;
     private PackageManager packageManager;
+    private final HostnameResolver hostnameResolver = new HostnameResolver();
 
     public void init(ConnectivityManager cm, PackageManager pm) {
         this.connectivityManager = cm;
         this.packageManager = pm;
+    }
+
+    public HostnameResolver getHostnameResolver() {
+        return hostnameResolver;
     }
 
     public List<ConnectionInfo> getConnections() {
@@ -55,6 +60,7 @@ public class ConnectionTracker {
         synchronized (connections) {
             connections.clear();
         }
+        hostnameResolver.clear();
         udpForwarded.set(0);
         tcpForwarded.set(0);
         tcpSeen.set(0);
@@ -68,6 +74,9 @@ public class ConnectionTracker {
     public void onPacket(byte[] data, int length) {
         packetsSeen.incrementAndGet();
         if (length < 20) return;
+
+        // DNS / SNI side-channel
+        hostnameResolver.inspectPacket(data, length);
 
         int version = (data[0] >> 4) & 0x0F;
         if (version != 4) return;
@@ -108,12 +117,19 @@ public class ConnectionTracker {
                 resolveUid(info, osProto, srcIp, srcPort, destIp, destPort);
             } else {
                 info.packetCount++;
-                // retry resolution once if still unknown
                 if (info.uid <= 0) {
                     resolveUid(info, osProto, srcIp, srcPort, destIp, destPort);
                 }
             }
             info.bytes += length;
+
+            // Attach hostname if known (DNS or SNI)
+            if (info.hostname == null) {
+                String host = hostnameResolver.getHostname(destIp);
+                if (host != null) {
+                    info.hostname = host;
+                }
+            }
         }
     }
 
@@ -123,8 +139,6 @@ public class ConnectionTracker {
         if (connectivityManager == null) return;
 
         int uid = lookupOwnerUid(protocol, localIp, localPort, remoteIp, remotePort);
-
-        // Sometimes the API wants the endpoints swapped depending on direction
         if (uid <= 0 || uid == android.os.Process.INVALID_UID) {
             uid = lookupOwnerUid(protocol, remoteIp, remotePort, localIp, localPort);
         }
@@ -158,13 +172,8 @@ public class ConnectionTracker {
 
         try {
             String[] packages = packageManager.getPackagesForUid(uid);
-            if (packages == null || packages.length == 0) {
-                // system / isolated uid without package
-                info.appName = null;
-                return;
-            }
+            if (packages == null || packages.length == 0) return;
 
-            // Prefer a non-system-looking package if multiple share the UID
             String chosen = packages[0];
             for (String pkg : packages) {
                 if (!pkg.startsWith("android.") && !pkg.startsWith("com.android.")) {
