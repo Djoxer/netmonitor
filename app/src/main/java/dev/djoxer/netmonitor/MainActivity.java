@@ -119,9 +119,16 @@ public class MainActivity extends Activity {
     private void updateConnectionsList() {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("UDP forwarded: ").append(NetVpnService.udpForwarded.get())
-                .append("   |   TCP seen: ").append(NetVpnService.tcpSeen.get())
-                .append("   |   UDP sessions: ").append(NetVpnService.getLiveUdpSessions())
+        sb.append("UDP fwd: ").append(NetVpnService.udpForwarded.get())
+                .append(" | TCP fwd: ").append(NetVpnService.tcpForwarded.get())
+                .append(" | ClientPayloads: ").append(NetVpnService.tcpClientPayloads.get())
+                .append("\n")
+                .append("SYN: ").append(NetVpnService.tcpSynSeen.get())
+                .append(" | Sessions: ").append(NetVpnService.tcpSessionsCreated.get())
+                .append(" | ConnectErr: ").append(NetVpnService.tcpConnectErrors.get())
+                .append("\n")
+                .append("Live UDP: ").append(NetVpnService.getLiveUdpSessions())
+                .append(" | Live TCP: ").append(NetVpnService.getLiveTcpSessions())
                 .append("\n\n");
 
         List<ConnectionInfo> list = NetVpnService.getConnections();

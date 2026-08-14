@@ -19,10 +19,13 @@ import androidx.core.app.NotificationCompat;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,14 +51,25 @@ public class NetVpnService extends VpnService {
 
     private static volatile boolean blockMode = false;
 
-    // Debug counters
     public static final AtomicLong udpForwarded = new AtomicLong(0);
+    public static final AtomicLong tcpForwarded = new AtomicLong(0);
     public static final AtomicLong tcpSeen = new AtomicLong(0);
+    public static final AtomicLong tcpSynSeen = new AtomicLong(0);
+    public static final AtomicLong tcpSessionsCreated = new AtomicLong(0);
+    public static final AtomicLong tcpConnectErrors = new AtomicLong(0);
+    public static final AtomicLong tcpClientPayloads = new AtomicLong(0);
     public static final AtomicLong packetsSeen = new AtomicLong(0);
+
+    private static volatile int liveUdpSessions = 0;
+    private static volatile int liveTcpSessions = 0;
+
+    public static int getLiveUdpSessions() { return liveUdpSessions; }
+    public static int getLiveTcpSessions() { return liveTcpSessions; }
 
     private ParcelFileDescriptor vpnInterface = null;
     private Thread captureThread = null;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private FileOutputStream tunOut = null;
 
     private ConnectivityManager connectivityManager;
     private PackageManager packageManager;
@@ -64,11 +78,12 @@ public class NetVpnService extends VpnService {
     private final Map<Integer, String> uidToAppName = new HashMap<>();
 
     private final Map<String, UdpSession> udpSessions = new ConcurrentHashMap<>();
+    private final Map<String, TcpSession> tcpSessions = new ConcurrentHashMap<>();
 
-    private static final Map<String, ConnectionInfo> connections = new LinkedHashMap<>(300, 0.75f, true) {
+    private static final Map<String, ConnectionInfo> connections = new LinkedHashMap<>(400, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, ConnectionInfo> eldest) {
-            return size() > 300;
+            return size() > 400;
         }
     };
 
@@ -83,23 +98,17 @@ public class NetVpnService extends VpnService {
             connections.clear();
         }
         udpForwarded.set(0);
+        tcpForwarded.set(0);
         tcpSeen.set(0);
+        tcpSynSeen.set(0);
+        tcpSessionsCreated.set(0);
+        tcpConnectErrors.set(0);
+        tcpClientPayloads.set(0);
         packetsSeen.set(0);
     }
 
     public static boolean isBlockMode() {
         return blockMode;
-    }
-
-    public static int getUdpSessionCount() {
-        // approximate – not perfectly synchronized
-        return 0; // will be set from instance if needed
-    }
-
-    private static volatile int liveUdpSessions = 0;
-
-    public static int getLiveUdpSessions() {
-        return liveUdpSessions;
     }
 
     @Override
@@ -116,54 +125,44 @@ public class NetVpnService extends VpnService {
             stopSelf();
             return START_NOT_STICKY;
         }
-
         if (intent != null) {
             blockMode = intent.getBooleanExtra(EXTRA_BLOCK_MODE, false);
         }
-
         startForeground(NOTIFICATION_ID, buildNotification(
-                blockMode ? "Block mode" : "Forward mode (UDP)"));
+                blockMode ? "Block mode" : "Forward mode (UDP+TCP)"));
         startVpn();
         return START_STICKY;
     }
 
     private void startVpn() {
         if (running.get()) return;
-
         try {
             Builder builder = new Builder();
             builder.setSession("NetMonitor");
             builder.setMtu(1500);
-
             builder.addAddress("10.0.0.2", 32);
             builder.addRoute("0.0.0.0", 0);
-
             try {
                 builder.addAddress("fd00:1:fd00:1:fd00:1:fd00:1", 128);
                 builder.addRoute("::", 0);
             } catch (Exception e) {
                 Log.w(TAG, "IPv6 not available", e);
             }
-
             builder.addDisallowedApplication(getPackageName());
             builder.setBlocking(true);
 
             vpnInterface = builder.establish();
             if (vpnInterface == null) {
-                Log.e(TAG, "Failed to establish VPN");
                 stopSelf();
                 return;
             }
 
             running.set(true);
-            updateNotification(blockMode ? "Block mode active" : "Forward mode (UDP only)");
+            updateNotification(blockMode ? "Block mode active" : "Forward mode (UDP+TCP)");
 
             captureThread = new Thread(this::captureLoop, "NetMonitor-Capture");
             captureThread.setPriority(Thread.MAX_PRIORITY);
             captureThread.start();
-
-            Log.i(TAG, "VPN started – blockMode=" + blockMode);
-
         } catch (Exception e) {
             Log.e(TAG, "startVpn failed", e);
             stopVpn();
@@ -173,11 +172,9 @@ public class NetVpnService extends VpnService {
 
     private void captureLoop() {
         FileInputStream in = null;
-        FileOutputStream out = null;
-
         try {
             in = new FileInputStream(vpnInterface.getFileDescriptor());
-            out = new FileOutputStream(vpnInterface.getFileDescriptor());
+            tunOut = new FileOutputStream(vpnInterface.getFileDescriptor());
             byte[] buffer = new byte[32767];
 
             while (running.get()) {
@@ -186,41 +183,41 @@ public class NetVpnService extends VpnService {
 
                 packetsSeen.incrementAndGet();
                 parsePacket(buffer, length);
-
-                if (blockMode) {
-                    continue; // drop
-                }
+                if (blockMode) continue;
 
                 int version = (buffer[0] >> 4) & 0x0F;
-                if (version == 4) {
-                    int protocol = buffer[9] & 0xFF;
-                    if (protocol == 17) { // UDP
-                        handleUdpForward(buffer, length, out);
-                    } else if (protocol == 6) { // TCP
-                        tcpSeen.incrementAndGet();
-                    }
+                if (version != 4) continue;
+
+                int protocol = buffer[9] & 0xFF;
+                if (protocol == 17) {
+                    handleUdpForward(buffer, length);
+                } else if (protocol == 6) {
+                    tcpSeen.incrementAndGet();
+                    handleTcpForward(buffer, length);
                 }
             }
         } catch (Exception e) {
             if (running.get()) Log.e(TAG, "captureLoop error", e);
         } finally {
             try { if (in != null) in.close(); } catch (Exception ignored) {}
-            try { if (out != null) out.close(); } catch (Exception ignored) {}
+            try { if (tunOut != null) tunOut.close(); } catch (Exception ignored) {}
+            tunOut = null;
         }
     }
 
-    private void handleUdpForward(byte[] data, int length, FileOutputStream tunOut) {
+    // ===================== UDP =====================
+
+    private void handleUdpForward(byte[] data, int length) {
         try {
-            int headerLength = (data[0] & 0x0F) * 4;
-            if (length < headerLength + 8) return;
+            int ipHeaderLen = (data[0] & 0x0F) * 4;
+            if (length < ipHeaderLen + 8) return;
 
-            byte[] srcIpBytes = new byte[]{data[12], data[13], data[14], data[15]};
-            int srcPort = ((data[headerLength] & 0xFF) << 8) | (data[headerLength + 1] & 0xFF);
+            byte[] srcIpBytes = {data[12], data[13], data[14], data[15]};
+            int srcPort = ((data[ipHeaderLen] & 0xFF) << 8) | (data[ipHeaderLen + 1] & 0xFF);
+            byte[] dstIpBytes = {data[16], data[17], data[18], data[19]};
+            int dstPort = ((data[ipHeaderLen + 2] & 0xFF) << 8) | (data[ipHeaderLen + 3] & 0xFF);
 
-            byte[] dstIpBytes = new byte[]{data[16], data[17], data[18], data[19]};
-            int dstPort = ((data[headerLength + 2] & 0xFF) << 8) | (data[headerLength + 3] & 0xFF);
-
-            int payloadOffset = headerLength + 8;
+            int payloadOffset = ipHeaderLen + 8;
             int payloadLen = length - payloadOffset;
             if (payloadLen <= 0) return;
 
@@ -232,11 +229,9 @@ public class NetVpnService extends VpnService {
                 DatagramSocket socket = new DatagramSocket();
                 protect(socket);
                 socket.connect(InetAddress.getByAddress(dstIpBytes), dstPort);
-
-                session = new UdpSession(socket, srcIpBytes, srcPort, dstIpBytes, dstPort, tunOut);
+                session = new UdpSession(socket, srcIpBytes, srcPort, dstIpBytes, dstPort);
                 udpSessions.put(key, session);
                 liveUdpSessions = udpSessions.size();
-
                 Thread t = new Thread(session, "UDP-" + key);
                 t.setDaemon(true);
                 t.start();
@@ -246,7 +241,6 @@ public class NetVpnService extends VpnService {
             System.arraycopy(data, payloadOffset, payload, 0, payloadLen);
             session.socket.send(new DatagramPacket(payload, payload.length));
             udpForwarded.incrementAndGet();
-
         } catch (Exception e) {
             Log.w(TAG, "UDP forward error", e);
         }
@@ -254,20 +248,16 @@ public class NetVpnService extends VpnService {
 
     private class UdpSession implements Runnable {
         final DatagramSocket socket;
-        final byte[] clientIp;
-        final int clientPort;
-        final byte[] remoteIp;
-        final int remotePort;
-        final FileOutputStream tunOut;
+        final byte[] clientIp, remoteIp;
+        final int clientPort, remotePort;
 
         UdpSession(DatagramSocket socket, byte[] clientIp, int clientPort,
-                   byte[] remoteIp, int remotePort, FileOutputStream tunOut) {
+                   byte[] remoteIp, int remotePort) {
             this.socket = socket;
             this.clientIp = clientIp;
             this.clientPort = clientPort;
             this.remoteIp = remoteIp;
             this.remotePort = remotePort;
-            this.tunOut = tunOut;
         }
 
         @Override
@@ -277,18 +267,10 @@ public class NetVpnService extends VpnService {
                 while (running.get() && !socket.isClosed()) {
                     DatagramPacket packet = new DatagramPacket(buf, buf.length);
                     socket.receive(packet);
-
-                    byte[] response = buildUdpPacket(
-                            remoteIp, remotePort,
-                            clientIp, clientPort,
-                            packet.getData(), packet.getOffset(), packet.getLength());
-
-                    synchronized (tunOut) {
-                        tunOut.write(response);
-                    }
+                    writeToTun(buildUdpPacket(remoteIp, remotePort, clientIp, clientPort,
+                            packet.getData(), packet.getOffset(), packet.getLength()));
                 }
-            } catch (Exception e) {
-                // normal on close
+            } catch (Exception ignored) {
             } finally {
                 try { socket.close(); } catch (Exception ignored) {}
                 udpSessions.values().remove(this);
@@ -297,67 +279,329 @@ public class NetVpnService extends VpnService {
         }
     }
 
-    private byte[] buildUdpPacket(byte[] srcIp, int srcPort,
-                                  byte[] dstIp, int dstPort,
+    private byte[] buildUdpPacket(byte[] srcIp, int srcPort, byte[] dstIp, int dstPort,
                                   byte[] payload, int offset, int len) {
         int totalLen = 20 + 8 + len;
         ByteBuffer buf = ByteBuffer.allocate(totalLen);
-
-        buf.put((byte) 0x45);
-        buf.put((byte) 0);
-        buf.putShort((short) totalLen);
-        buf.putShort((short) 0);
-        buf.putShort((short) 0x4000);
-        buf.put((byte) 64);
-        buf.put((byte) 17);
-        buf.putShort((short) 0);
-        buf.put(srcIp);
-        buf.put(dstIp);
-
-        buf.putShort((short) srcPort);
-        buf.putShort((short) dstPort);
-        buf.putShort((short) (8 + len));
-        buf.putShort((short) 0);
-
+        buf.put((byte) 0x45); buf.put((byte) 0);
+        buf.putShort((short) totalLen); buf.putShort((short) 0); buf.putShort((short) 0x4000);
+        buf.put((byte) 64); buf.put((byte) 17); buf.putShort((short) 0);
+        buf.put(srcIp); buf.put(dstIp);
+        buf.putShort((short) srcPort); buf.putShort((short) dstPort);
+        buf.putShort((short) (8 + len)); buf.putShort((short) 0);
         buf.put(payload, offset, len);
         return buf.array();
     }
 
+    // ===================== TCP =====================
+
+    private void handleTcpForward(byte[] data, int length) {
+        try {
+            int ipHeaderLen = (data[0] & 0x0F) * 4;
+            if (length < ipHeaderLen + 20) return;
+
+            byte[] srcIpBytes = {data[12], data[13], data[14], data[15]};
+            byte[] dstIpBytes = {data[16], data[17], data[18], data[19]};
+            int srcPort = ((data[ipHeaderLen] & 0xFF) << 8) | (data[ipHeaderLen + 1] & 0xFF);
+            int dstPort = ((data[ipHeaderLen + 2] & 0xFF) << 8) | (data[ipHeaderLen + 3] & 0xFF);
+            int seq = ByteBuffer.wrap(data, ipHeaderLen + 4, 4).getInt();
+
+            int dataOffset = ((data[ipHeaderLen + 12] & 0xF0) >> 4) * 4;
+            int flags = data[ipHeaderLen + 13] & 0xFF;
+            boolean syn = (flags & 0x02) != 0;
+            boolean fin = (flags & 0x01) != 0;
+            boolean rst = (flags & 0x04) != 0;
+
+            int payloadOffset = ipHeaderLen + dataOffset;
+            int payloadLen = Math.max(0, length - payloadOffset);
+
+            String remoteIp = InetAddress.getByAddress(dstIpBytes).getHostAddress();
+            String key = srcPort + "|" + remoteIp + "|" + dstPort;
+
+            TcpSession session = tcpSessions.get(key);
+
+            if (rst) {
+                if (session != null) {
+                    session.close();
+                    tcpSessions.remove(key);
+                    liveTcpSessions = tcpSessions.size();
+                }
+                return;
+            }
+
+            if (session == null) {
+                if (!syn) return;
+                tcpSynSeen.incrementAndGet();
+
+                try {
+                    Socket socket = new Socket();
+                    protect(socket);
+                    socket.connect(new InetSocketAddress(InetAddress.getByAddress(dstIpBytes), dstPort), 10000);
+                    socket.setTcpNoDelay(true);
+
+                    session = new TcpSession(socket, srcIpBytes, srcPort, dstIpBytes, dstPort, seq);
+                    tcpSessions.put(key, session);
+                    liveTcpSessions = tcpSessions.size();
+                    tcpSessionsCreated.incrementAndGet();
+
+                    // SYN-ACK **mit MSS-Option**
+                    byte[] synAck = buildTcpPacket(
+                            dstIpBytes, dstPort,
+                            srcIpBytes, srcPort,
+                            session.serverSeq, seq + 1,
+                            (byte) 0x12, // SYN+ACK
+                            null, 0, 0,
+                            true); // include MSS
+                    writeToTun(synAck);
+                    session.serverSeq++;
+
+                    Thread t = new Thread(session, "TCP-" + key);
+                    t.setDaemon(true);
+                    t.start();
+                } catch (Exception e) {
+                    tcpConnectErrors.incrementAndGet();
+                    Log.w(TAG, "TCP connect failed " + remoteIp + ":" + dstPort, e);
+                }
+                return;
+            }
+
+            // Client data → real server
+            if (payloadLen > 0) {
+                tcpClientPayloads.incrementAndGet();
+                byte[] payload = new byte[payloadLen];
+                System.arraycopy(data, payloadOffset, payload, 0, payloadLen);
+                session.out.write(payload);
+                session.out.flush();
+                tcpForwarded.addAndGet(payloadLen);
+                session.clientSeq = seq + payloadLen;
+            } else {
+                // pure ACK – keep clientSeq in sync if possible
+                session.clientSeq = Math.max(session.clientSeq, seq);
+            }
+
+            // ACK back to client
+            byte[] ackPkt = buildTcpPacket(
+                    dstIpBytes, dstPort,
+                    srcIpBytes, srcPort,
+                    session.serverSeq, session.clientSeq,
+                    (byte) 0x10,
+                    null, 0, 0,
+                    false);
+            writeToTun(ackPkt);
+
+            if (fin) {
+                session.close();
+                tcpSessions.remove(key);
+                liveTcpSessions = tcpSessions.size();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "TCP forward error", e);
+        }
+    }
+
+    private class TcpSession implements Runnable {
+        final Socket socket;
+        final OutputStream out;
+        final InputStream in;
+        final byte[] clientIp, remoteIp;
+        final int clientPort, remotePort;
+        int clientSeq;
+        int serverSeq;
+
+        TcpSession(Socket socket, byte[] clientIp, int clientPort,
+                   byte[] remoteIp, int remotePort, int initialClientSeq) throws IOException {
+            this.socket = socket;
+            this.out = socket.getOutputStream();
+            this.in = socket.getInputStream();
+            this.clientIp = clientIp;
+            this.clientPort = clientPort;
+            this.remoteIp = remoteIp;
+            this.remotePort = remotePort;
+            this.clientSeq = initialClientSeq + 1;
+            this.serverSeq = (int) (System.currentTimeMillis() & 0x7FFFFFFF);
+        }
+
+        @Override
+        public void run() {
+            byte[] buf = new byte[16384];
+            try {
+                while (running.get() && !socket.isClosed()) {
+                    int read = in.read(buf);
+                    if (read < 0) break;
+
+                    byte[] packet = buildTcpPacket(
+                            remoteIp, remotePort,
+                            clientIp, clientPort,
+                            serverSeq, clientSeq,
+                            (byte) 0x18, // PSH+ACK
+                            buf, 0, read,
+                            false);
+                    writeToTun(packet);
+                    serverSeq += read;
+                    tcpForwarded.addAndGet(read);
+                }
+            } catch (Exception ignored) {
+            } finally {
+                close();
+                tcpSessions.values().remove(this);
+                liveTcpSessions = tcpSessions.size();
+            }
+        }
+
+        void close() {
+            try { socket.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * Build a TCP packet with correct IP + TCP checksums.
+     * @param withMss add MSS option (for SYN-ACK)
+     */
+    private byte[] buildTcpPacket(byte[] srcIp, int srcPort,
+                                  byte[] dstIp, int dstPort,
+                                  int seq, int ack,
+                                  byte flags,
+                                  byte[] payload, int offset, int len,
+                                  boolean withMss) {
+        if (payload == null) len = 0;
+
+        int tcpHeaderLen = withMss ? 24 : 20;
+        int totalLen = 20 + tcpHeaderLen + len;
+        byte[] packet = new byte[totalLen];
+        ByteBuffer buf = ByteBuffer.wrap(packet);
+
+        // ----- IP Header -----
+        buf.put((byte) 0x45);                    // Version + IHL
+        buf.put((byte) 0);                       // DSCP
+        buf.putShort((short) totalLen);          // Total length
+        buf.putShort((short) 0);                 // Identification
+        buf.putShort((short) 0x4000);            // Don't Fragment
+        buf.put((byte) 64);                      // TTL
+        buf.put((byte) 6);                       // Protocol TCP
+        buf.putShort((short) 0);                 // Checksum placeholder
+        buf.put(srcIp);
+        buf.put(dstIp);
+
+        // IP checksum
+        int ipChecksum = ipChecksum(packet, 0, 20);
+        packet[10] = (byte) (ipChecksum >> 8);
+        packet[11] = (byte) (ipChecksum);
+
+        // ----- TCP Header -----
+        int tcpStart = 20;
+        buf.position(tcpStart);
+        buf.putShort((short) srcPort);
+        buf.putShort((short) dstPort);
+        buf.putInt(seq);
+        buf.putInt(ack);
+        buf.put((byte) ((tcpHeaderLen / 4) << 4)); // data offset
+        buf.put(flags);
+        buf.putShort((short) 65535);             // window
+        buf.putShort((short) 0);                 // checksum placeholder
+        buf.putShort((short) 0);                 // urgent pointer
+
+        if (withMss) {
+            // MSS option: kind=2, len=4, mss=1460
+            buf.put((byte) 2);
+            buf.put((byte) 4);
+            buf.putShort((short) 1460);
+        }
+
+        if (len > 0) {
+            buf.put(payload, offset, len);
+        }
+
+        // TCP checksum (includes pseudo-header)
+        int tcpLen = tcpHeaderLen + len;
+        int tcpChecksum = tcpChecksum(srcIp, dstIp, packet, tcpStart, tcpLen);
+        packet[tcpStart + 16] = (byte) (tcpChecksum >> 8);
+        packet[tcpStart + 17] = (byte) (tcpChecksum);
+
+        return packet;
+    }
+
+    /** Standard IP header checksum */
+    private int ipChecksum(byte[] data, int offset, int length) {
+        int sum = 0;
+        for (int i = offset; i < offset + length - 1; i += 2) {
+            sum += ((data[i] & 0xFF) << 8) | (data[i + 1] & 0xFF);
+        }
+        if ((length & 1) != 0) {
+            sum += (data[offset + length - 1] & 0xFF) << 8;
+        }
+        while ((sum >> 16) != 0) {
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        return ~sum & 0xFFFF;
+    }
+
+    /** TCP checksum with IPv4 pseudo-header */
+    private int tcpChecksum(byte[] srcIp, byte[] dstIp,
+                            byte[] tcpPacket, int tcpOffset, int tcpLength) {
+        int sum = 0;
+
+        // Pseudo-header
+        sum += ((srcIp[0] & 0xFF) << 8) | (srcIp[1] & 0xFF);
+        sum += ((srcIp[2] & 0xFF) << 8) | (srcIp[3] & 0xFF);
+        sum += ((dstIp[0] & 0xFF) << 8) | (dstIp[1] & 0xFF);
+        sum += ((dstIp[2] & 0xFF) << 8) | (dstIp[3] & 0xFF);
+        sum += 6;                    // protocol TCP
+        sum += tcpLength;
+
+        // TCP header + payload
+        for (int i = tcpOffset; i < tcpOffset + tcpLength - 1; i += 2) {
+            sum += ((tcpPacket[i] & 0xFF) << 8) | (tcpPacket[i + 1] & 0xFF);
+        }
+        if ((tcpLength & 1) != 0) {
+            sum += (tcpPacket[tcpOffset + tcpLength - 1] & 0xFF) << 8;
+        }
+
+        while ((sum >> 16) != 0) {
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        return ~sum & 0xFFFF;
+    }
+
+    private void writeToTun(byte[] packet) {
+        if (tunOut == null) return;
+        try {
+            synchronized (tunOut) {
+                tunOut.write(packet);
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "writeToTun failed", e);
+        }
+    }
+
+    // ===================== Tracking =====================
+
     private void parsePacket(byte[] data, int length) {
         if (length < 20) return;
-
         int version = (data[0] >> 4) & 0x0F;
         if (version != 4) return;
-
         int headerLength = (data[0] & 0x0F) * 4;
         if (length < headerLength + 4) return;
 
         int protocol = data[9] & 0xFF;
         String protoName;
         int osProto;
-
         if (protocol == 6) {
             protoName = "TCP";
             osProto = OsConstants.IPPROTO_TCP;
         } else if (protocol == 17) {
             protoName = "UDP";
             osProto = OsConstants.IPPROTO_UDP;
-        } else {
-            return;
-        }
+        } else return;
 
         String srcIp = (data[12] & 0xFF) + "." + (data[13] & 0xFF) + "." +
                 (data[14] & 0xFF) + "." + (data[15] & 0xFF);
         int srcPort = ((data[headerLength] & 0xFF) << 8) | (data[headerLength + 1] & 0xFF);
-
         String destIp = (data[16] & 0xFF) + "." + (data[17] & 0xFF) + "." +
                 (data[18] & 0xFF) + "." + (data[19] & 0xFF);
         int destPort = ((data[headerLength + 2] & 0xFF) << 8) | (data[headerLength + 3] & 0xFF);
-
         if (destIp.startsWith("10.0.0.") || destPort == 0) return;
 
         String key = protoName + "|" + destIp + "|" + destPort;
-
         synchronized (connections) {
             ConnectionInfo info = connections.get(key);
             if (info == null) {
@@ -376,9 +620,9 @@ public class NetVpnService extends VpnService {
                                String remoteIp, int remotePort) {
         if (connectivityManager == null) return;
         try {
-            InetSocketAddress local = new InetSocketAddress(localIp, localPort);
-            InetSocketAddress remote = new InetSocketAddress(remoteIp, remotePort);
-            int uid = connectivityManager.getConnectionOwnerUid(protocol, local, remote);
+            int uid = connectivityManager.getConnectionOwnerUid(protocol,
+                    new InetSocketAddress(localIp, localPort),
+                    new InetSocketAddress(remoteIp, remotePort));
             if (uid > 0 && uid != android.os.Process.INVALID_UID) {
                 info.uid = uid;
                 resolvePackageName(info, uid);
@@ -400,9 +644,8 @@ public class NetVpnService extends VpnService {
                 uidToPackage.put(uid, pkg);
                 try {
                     ApplicationInfo ai = packageManager.getApplicationInfo(pkg, 0);
-                    String name = packageManager.getApplicationLabel(ai).toString();
-                    info.appName = name;
-                    uidToAppName.put(uid, name);
+                    info.appName = packageManager.getApplicationLabel(ai).toString();
+                    uidToAppName.put(uid, info.appName);
                 } catch (Exception e) {
                     info.appName = pkg;
                     uidToAppName.put(uid, pkg);
@@ -413,25 +656,22 @@ public class NetVpnService extends VpnService {
 
     private void stopVpn() {
         running.set(false);
-
         for (UdpSession s : udpSessions.values()) {
             try { s.socket.close(); } catch (Exception ignored) {}
         }
         udpSessions.clear();
         liveUdpSessions = 0;
-
+        for (TcpSession s : tcpSessions.values()) s.close();
+        tcpSessions.clear();
+        liveTcpSessions = 0;
         if (captureThread != null) {
             try { captureThread.join(2000); } catch (InterruptedException ignored) {}
             captureThread = null;
         }
-
         if (vpnInterface != null) {
-            try { vpnInterface.close(); } catch (Exception e) {
-                Log.e(TAG, "Error closing interface", e);
-            }
+            try { vpnInterface.close(); } catch (Exception ignored) {}
             vpnInterface = null;
         }
-        Log.i(TAG, "VPN stopped");
     }
 
     @Override
@@ -442,11 +682,9 @@ public class NetVpnService extends VpnService {
 
     private Notification buildNotification(String text) {
         createNotificationChannel();
-        Intent openIntent = new Intent(this, MainActivity.class);
-        PendingIntent pending = PendingIntent.getActivity(
-                this, 0, openIntent,
+        PendingIntent pending = PendingIntent.getActivity(this, 0,
+                new Intent(this, MainActivity.class),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("NetMonitor")
                 .setContentText(text)
@@ -458,9 +696,7 @@ public class NetVpnService extends VpnService {
 
     private void updateNotification(String text) {
         NotificationManager nm = getSystemService(NotificationManager.class);
-        if (nm != null) {
-            nm.notify(NOTIFICATION_ID, buildNotification(text));
-        }
+        if (nm != null) nm.notify(NOTIFICATION_ID, buildNotification(text));
     }
 
     private void createNotificationChannel() {
