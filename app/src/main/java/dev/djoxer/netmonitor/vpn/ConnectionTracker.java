@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class ConnectionTracker {
 
     private static final String TAG = "ConnectionTracker";
+    private static final String TUN_PREFIX = "10.0.0.";
 
     public final AtomicLong udpForwarded = new AtomicLong(0);
     public final AtomicLong tcpForwarded = new AtomicLong(0);
@@ -75,7 +76,6 @@ public class ConnectionTracker {
         packetsSeen.incrementAndGet();
         if (length < 20) return;
 
-        // DNS / SNI side-channel
         hostnameResolver.inspectPacket(data, length);
 
         int version = (data[0] >> 4) & 0x0F;
@@ -105,27 +105,62 @@ public class ConnectionTracker {
                 (data[18] & 0xFF) + "." + (data[19] & 0xFF);
         int destPort = ((data[headerLength + 2] & 0xFF) << 8) | (data[headerLength + 3] & 0xFF);
 
-        if (destIp.startsWith("10.0.0.") || destPort == 0 || srcPort == 0) return;
+        if (srcPort == 0 || destPort == 0) return;
 
-        String key = protoName + "|" + srcPort + "|" + destIp + "|" + destPort;
+        // Direction relative to the device:
+        // OUT = packet going to the internet (dest is remote)
+        // IN  = packet coming back into the TUN (dest is our TUN address)
+        final boolean inbound = destIp.startsWith(TUN_PREFIX);
+        final boolean outbound = srcIp.startsWith(TUN_PREFIX) || !inbound;
+
+        // Normalize to: localPort + remoteIp + remotePort
+        final String remoteIp;
+        final int remotePort;
+        final int localPort;
+        final String localIp;
+
+        if (inbound) {
+            // src = remote server, dest = local TUN
+            remoteIp = srcIp;
+            remotePort = srcPort;
+            localPort = destPort;
+            localIp = destIp;
+        } else {
+            // src = local, dest = remote
+            remoteIp = destIp;
+            remotePort = destPort;
+            localPort = srcPort;
+            localIp = srcIp;
+        }
+
+        // Skip pure internal junk
+        if (remoteIp.startsWith(TUN_PREFIX)) return;
+
+        String key = protoName + "|" + localPort + "|" + remoteIp + "|" + remotePort;
 
         synchronized (connections) {
             ConnectionInfo info = connections.get(key);
             if (info == null) {
-                info = new ConnectionInfo(protoName, destIp, destPort, srcPort);
+                info = new ConnectionInfo(protoName, remoteIp, remotePort, localPort);
                 connections.put(key, info);
-                resolveUid(info, osProto, srcIp, srcPort, destIp, destPort);
+                resolveUid(info, osProto, localIp, localPort, remoteIp, remotePort);
             } else {
                 info.packetCount++;
                 if (info.uid <= 0) {
-                    resolveUid(info, osProto, srcIp, srcPort, destIp, destPort);
+                    resolveUid(info, osProto, localIp, localPort, remoteIp, remotePort);
                 }
             }
-            info.bytes += length;
 
-            // Attach hostname if known (DNS or SNI)
+            if (inbound) {
+                info.seenIn = true;
+                info.bytesIn += length;
+            } else {
+                info.seenOut = true;
+                info.bytesOut += length;
+            }
+
             if (info.hostname == null) {
-                String host = hostnameResolver.getHostname(destIp);
+                String host = hostnameResolver.getHostname(remoteIp);
                 if (host != null) {
                     info.hostname = host;
                 }
