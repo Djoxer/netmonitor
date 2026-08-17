@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="10dp"
+    android:layout_marginBottom="6dp"
+    android:background="#1E1E1E"
+    android:gravity="center_vertical">
+
+    <ImageView
+        android:id="@+id/appIcon"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="@null" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/appName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/appStats"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#9E9E9E"
+            android:textSize="11sp"
+            android:maxLines="2" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/blockBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="BLOCK"
+        android:textSize="10sp"
+        android:textColor="#FF5722"
+        android:visibility="gone" />
+</LinearLayout>
