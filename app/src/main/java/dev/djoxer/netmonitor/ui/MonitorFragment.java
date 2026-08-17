@@ -166,40 +166,8 @@ public class MonitorFragment extends Fragment {
     }
 
     private void showAppDialog(AppGroup group) {
-        StringBuilder body = new StringBuilder();
-        body.append(group.displayName).append("\n");
-        if (group.packageName != null) body.append(group.packageName).append("\n");
-        body.append("\nConnections:\n");
-        int n = 0;
-        for (ConnectionInfo c : group.connections) {
-            body.append(" • ").append(c.protocol).append(" ")
-                    .append(c.hostname != null ? c.hostname : c.destIp)
-                    .append(":").append(c.destPort)
-                    .append("\n");
-            if (++n >= 30) {
-                body.append(" …\n");
-                break;
-            }
-        }
-
-        boolean blocked = group.packageName != null
-                && BlockManager.getInstance().isPermanentlyBlocked(group.packageName);
-
-        new AlertDialog.Builder(requireContext())
-                .setTitle(group.displayName)
-                .setMessage(body.toString())
-                .setPositiveButton(blocked ? "Unblock app" : "Block app", (d, w) -> {
-                    if (group.packageName == null) return;
-                    boolean nowBlocked = !blocked;
-                    ruleRepository.setPermanentBlockAsync(
-                            group.packageName,
-                            group.uid,
-                            group.displayName,
-                            nowBlocked);
-                    refreshLists();
-                })
-                .setNegativeButton("Close", null)
-                .show();
+        AppDetailDialog.newInstance(group)
+                .show(getParentFragmentManager(), "app_detail");
     }
 
     private void prepareAndStartVpn() {

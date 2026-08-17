@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Days"
+            android:textStyle="bold"
+            android:paddingBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <CheckBox android:id="@+id/dayMon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Mo" />
+            <CheckBox android:id="@+id/dayTue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tu" />
+            <CheckBox android:id="@+id/dayWed" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="We" />
+            <CheckBox android:id="@+id/dayThu" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Th" />
+            <CheckBox android:id="@+id/dayFri" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fr" />
+            <CheckBox android:id="@+id/daySat" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sa" />
+            <CheckBox android:id="@+id/daySun" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Su" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Start (HH:mm)"
+            android:paddingTop="12dp" />
+
+        <EditText
+            android:id="@+id/editStart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="time"
+            android:hint="22:00"
+            android:text="22:00" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="End (HH:mm)"
+            android:paddingTop="8dp" />
+
+        <EditText
+            android:id="@+id/editEnd"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="time"
+            android:hint="06:00"
+            android:text="06:00" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="If end &lt; start, the window spans midnight."
+            android:textSize="11sp"
+            android:paddingTop="8dp" />
+    </LinearLayout>
+</ScrollView>

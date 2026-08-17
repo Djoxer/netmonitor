@@ -21,6 +21,14 @@ public class RuleRepository {
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
     private final AppDatabase db;
 
+    public interface Callback {
+        void onDone();
+    }
+
+    public interface SchedulesCallback {
+        void onResult(List<BlockSchedule> schedules);
+    }
+
     public RuleRepository(Context context) {
         db = AppDatabase.getInstance(context);
     }
@@ -57,5 +65,46 @@ public class RuleRepository {
             BlockManager.getInstance().setPermanentBlock(packageName, blocked);
             if (uid > 0) BlockManager.getInstance().registerUid(uid, packageName);
         });
+    }
+
+    public void getSchedulesAsync(String packageName, SchedulesCallback callback) {
+        IO.execute(() -> {
+            List<ScheduleEntity> entities = db.scheduleDao().getForPackage(packageName);
+            List<BlockSchedule> result = new ArrayList<>();
+            for (ScheduleEntity s : entities) {
+                result.add(new BlockSchedule(s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
+            }
+            if (callback != null) {
+                callback.onResult(result);
+            }
+        });
+    }
+
+    public void addScheduleAsync(String packageName, int daysMask, int startMinute, int endMinute,
+                                 Callback callback) {
+        IO.execute(() -> {
+            ScheduleEntity entity = new ScheduleEntity(packageName, daysMask, startMinute, endMinute);
+            long id = db.scheduleDao().insert(entity);
+            entity.id = (int) id;
+            reloadPackageSchedules(packageName);
+            if (callback != null) callback.onDone();
+        });
+    }
+
+    public void deleteScheduleAsync(int scheduleId, String packageName, Callback callback) {
+        IO.execute(() -> {
+            db.scheduleDao().deleteById(scheduleId);
+            reloadPackageSchedules(packageName);
+            if (callback != null) callback.onDone();
+        });
+    }
+
+    private void reloadPackageSchedules(String packageName) {
+        List<ScheduleEntity> entities = db.scheduleDao().getForPackage(packageName);
+        List<BlockSchedule> list = new ArrayList<>();
+        for (ScheduleEntity s : entities) {
+            list.add(new BlockSchedule(s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
+        }
+        BlockManager.getInstance().setSchedules(packageName, list);
     }
 }
