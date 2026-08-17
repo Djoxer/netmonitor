@@ -75,6 +75,21 @@ public class AppDetailDialog extends DialogFragment {
         String packageName = args != null ? args.getString(ARG_PKG) : null;
         int uid = args != null ? args.getInt(ARG_UID, -1) : -1;
 
+        // Block identity: real package or synthetic "uid:1234"
+        final String blockKey;
+        if (packageName != null && !packageName.isEmpty()) {
+            blockKey = packageName;
+        } else if (uid > 0) {
+            blockKey = "uid:" + uid;
+        } else if (args != null && args.getString(ARG_KEY) != null) {
+            blockKey = args.getString(ARG_KEY);
+        } else {
+            blockKey = null;
+        }
+
+        final boolean canBlock = blockKey != null
+                && !blockKey.equals("unknown");
+
         name.setText(displayName);
         pkg.setText(packageName != null ? packageName : "no package");
 
@@ -105,26 +120,29 @@ public class AppDetailDialog extends DialogFragment {
         connections.setText(sb.toString());
 
         // Permanent block
-        boolean perm = packageName != null
-                && BlockManager.getInstance().isPermanentlyBlocked(packageName);
+        boolean perm = canBlock
+                && BlockManager.getInstance().isPermanentlyBlocked(blockKey);
         switchPermanent.setChecked(perm);
-        switchPermanent.setEnabled(packageName != null);
+        switchPermanent.setEnabled(canBlock);
         switchPermanent.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (packageName == null) return;
-            ruleRepository.setPermanentBlockAsync(packageName, uid, displayName, isChecked);
+            if (!canBlock) return;
+            ruleRepository.setPermanentBlockAsync(blockKey, uid, displayName, isChecked);
+            if (uid > 0) {
+                BlockManager.getInstance().registerUid(uid, blockKey);
+            }
         });
 
         // Schedules
         scheduleAdapter = new ScheduleAdapter(schedule -> {
-            if (packageName == null) return;
-            ruleRepository.deleteScheduleAsync(schedule.id, packageName, () ->
+            if (!canBlock) return;
+            ruleRepository.deleteScheduleAsync(schedule.id, blockKey, () ->
                     requireActivity().runOnUiThread(this::reloadSchedules));
         });
         recyclerSchedules.setLayoutManager(new LinearLayoutManager(requireContext()));
         recyclerSchedules.setAdapter(scheduleAdapter);
 
-        btnAdd.setEnabled(packageName != null);
-        btnAdd.setOnClickListener(v -> showAddScheduleDialog(packageName));
+        btnAdd.setEnabled(canBlock);
+        btnAdd.setOnClickListener(v -> showAddScheduleDialog(blockKey));
 
         btnClose.setOnClickListener(v -> dismiss());
 
@@ -155,11 +173,22 @@ public class AppDetailDialog extends DialogFragment {
     private void reloadSchedules() {
         Bundle args = getArguments();
         String packageName = args != null ? args.getString(ARG_PKG) : null;
-        if (packageName == null || scheduleAdapter == null) {
+        int uid = args != null ? args.getInt(ARG_UID, -1) : -1;
+
+        String blockKey;
+        if (packageName != null && !packageName.isEmpty()) {
+            blockKey = packageName;
+        } else if (uid > 0) {
+            blockKey = "uid:" + uid;
+        } else {
+            blockKey = args != null ? args.getString(ARG_KEY) : null;
+        }
+
+        if (blockKey == null || blockKey.equals("unknown") || scheduleAdapter == null) {
             if (scheduleAdapter != null) scheduleAdapter.submit(null);
             return;
         }
-        ruleRepository.getSchedulesAsync(packageName, list -> {
+        ruleRepository.getSchedulesAsync(blockKey, list -> {
             if (getActivity() == null) return;
             getActivity().runOnUiThread(() -> scheduleAdapter.submit(list));
         });

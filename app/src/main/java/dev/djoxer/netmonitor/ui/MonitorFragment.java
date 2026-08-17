@@ -67,8 +67,8 @@ public class MonitorFragment extends Fragment {
         RecyclerView recyclerOut = view.findViewById(R.id.recyclerOut);
         RecyclerView recyclerIn = view.findViewById(R.id.recyclerIn);
 
-        outAdapter = new AppTileAdapter(this::showAppDialog);
-        inAdapter = new AppTileAdapter(this::showAppDialog);
+        outAdapter = new AppTileAdapter(AppTileAdapter.Mode.OUT, this::showAppDialog);
+        inAdapter = new AppTileAdapter(AppTileAdapter.Mode.IN, this::showAppDialog);
 
         recyclerOut.setLayoutManager(new LinearLayoutManager(requireContext()));
         recyclerIn.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -119,7 +119,6 @@ public class MonitorFragment extends Fragment {
                     outMap.put(key, g);
                 }
                 g.bytesOut += c.bytesOut;
-                g.bytesIn += c.bytesIn;
                 g.connCount++;
                 g.connections.add(c);
             }
@@ -129,7 +128,6 @@ public class MonitorFragment extends Fragment {
                     g = buildGroup(key, c, pm);
                     inMap.put(key, g);
                 }
-                g.bytesOut += c.bytesOut;
                 g.bytesIn += c.bytesIn;
                 g.connCount++;
                 g.connections.add(c);
@@ -152,15 +150,18 @@ public class MonitorFragment extends Fragment {
         g.uid = c.uid;
         g.displayName = c.appName != null ? c.appName
                 : (c.packageName != null ? c.packageName : key);
-        g.blocked = c.packageName != null
-                && BlockManager.getInstance().shouldBlockPackage(c.packageName);
+
+        String blockKey = c.packageName != null ? c.packageName
+                : (c.uid > 0 ? "uid:" + c.uid : key);
+        g.blocked = BlockManager.getInstance().shouldBlockPackage(blockKey)
+                || (c.uid > 0 && BlockManager.getInstance().shouldBlock(c.uid));
 
         if (c.packageName != null) {
             try {
                 ApplicationInfo ai = pm.getApplicationInfo(c.packageName, 0);
-                Drawable icon = pm.getApplicationIcon(ai);
-                g.icon = icon;
-            } catch (Exception ignored) {}
+                g.icon = pm.getApplicationIcon(ai);
+            } catch (Exception ignored) {
+            }
         }
         return g;
     }

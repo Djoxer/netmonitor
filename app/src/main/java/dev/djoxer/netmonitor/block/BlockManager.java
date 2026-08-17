@@ -71,6 +71,10 @@ public class BlockManager {
      */
     public boolean shouldBlock(int uid) {
         if (uid <= 0) return false;
+
+        // Direct uid-key rules (system processes without package)
+        if (shouldBlockPackage("uid:" + uid)) return true;
+
         String pkg = uidToPackage.get(uid);
         if (pkg == null) return false;
         return shouldBlockPackage(pkg);

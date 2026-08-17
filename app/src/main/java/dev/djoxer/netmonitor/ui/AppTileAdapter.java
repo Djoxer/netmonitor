@@ -16,14 +16,18 @@ import dev.djoxer.netmonitor.R;
 
 public class AppTileAdapter extends RecyclerView.Adapter<AppTileAdapter.Holder> {
 
+    public enum Mode { OUT, IN }
+
     public interface Listener {
         void onAppClicked(AppGroup group);
     }
 
     private final List<AppGroup> items = new ArrayList<>();
     private final Listener listener;
+    private final Mode mode;
 
-    public AppTileAdapter(Listener listener) {
+    public AppTileAdapter(Mode mode, Listener listener) {
+        this.mode = mode;
         this.listener = listener;
     }
 
@@ -45,8 +49,13 @@ public class AppTileAdapter extends RecyclerView.Adapter<AppTileAdapter.Holder> 
     public void onBindViewHolder(@NonNull Holder h, int position) {
         AppGroup g = items.get(position);
         h.name.setText(g.displayName);
-        h.stats.setText("↑" + format(g.bytesOut) + "  ↓" + format(g.bytesIn)
-                + "  ·  " + g.connCount + " conn");
+
+        if (mode == Mode.OUT) {
+            h.stats.setText("↑ " + format(g.bytesOut) + "  ·  " + g.connCount + " conn");
+        } else {
+            h.stats.setText("↓ " + format(g.bytesIn) + "  ·  " + g.connCount + " conn");
+        }
+
         if (g.icon != null) {
             h.icon.setImageDrawable(g.icon);
         } else {
