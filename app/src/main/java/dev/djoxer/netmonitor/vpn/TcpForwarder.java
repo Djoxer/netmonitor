@@ -247,6 +247,7 @@ public class TcpForwarder {
         int clientSeq;
         int serverSeq;
         volatile long lastActivityMs;
+        boolean loggedFirstInbound = false;
 
         Session(Socket socket, byte[] clientIp, int clientPort,
                 byte[] remoteIp, int remotePort, int initialClientSeq, String key,
@@ -279,7 +280,25 @@ public class TcpForwarder {
                     int read = in.read(buf);
                     if (read < 0) break;
 
+                    if (!loggedFirstInbound) {
+                        loggedFirstInbound = true;
+                        LogWriter.getInstance().log(
+                                packageName,
+                                appName,
+                                "RECV",
+                                "IN",
+                                "TCP " + InetAddress.getByAddress(remoteIp).getHostAddress()
+                                        + ":" + remotePort);
+                    }
+
                     if (uid > 0 && BlockManager.getInstance().shouldBlock(uid)) {
+                        LogWriter.getInstance().log(
+                                packageName,
+                                appName,
+                                "BLOCKED",
+                                "IN",
+                                "TCP " + InetAddress.getByAddress(remoteIp).getHostAddress()
+                                        + ":" + remotePort);
                         break;
                     }
 

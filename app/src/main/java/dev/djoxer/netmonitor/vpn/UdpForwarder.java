@@ -131,6 +131,7 @@ public class UdpForwarder {
         final int uid;
         final String packageName;
         final String appName;
+        boolean loggedFirstInbound = false;
 
         Session(DatagramSocket socket, byte[] clientIp, int clientPort,
                 byte[] remoteIp, int remotePort, String key,
@@ -154,7 +155,19 @@ public class UdpForwarder {
                     DatagramPacket packet = new DatagramPacket(buf, buf.length);
                     socket.receive(packet);
 
+                    if (!loggedFirstInbound) {
+                        loggedFirstInbound = true;
+                        String remoteIpStr = InetAddress.getByAddress(remoteIp).getHostAddress();
+                        LogWriter.getInstance().log(
+                                packageName, appName, "RECV", "IN",
+                                "UDP " + remoteIpStr + ":" + remotePort);
+                    }
+
                     if (uid > 0 && BlockManager.getInstance().shouldBlock(uid)) {
+                        String remoteIpStr = InetAddress.getByAddress(remoteIp).getHostAddress();
+                        LogWriter.getInstance().log(
+                                packageName, appName, "BLOCKED", "IN",
+                                "UDP " + remoteIpStr + ":" + remotePort);
                         break;
                     }
 
