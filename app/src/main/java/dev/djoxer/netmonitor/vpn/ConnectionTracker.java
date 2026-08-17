@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
+import dev.djoxer.netmonitor.block.BlockManager;
+
 public class ConnectionTracker {
 
     private static final String TAG = "ConnectionTracker";
@@ -107,33 +109,25 @@ public class ConnectionTracker {
 
         if (srcPort == 0 || destPort == 0) return;
 
-        // Direction relative to the device:
-        // OUT = packet going to the internet (dest is remote)
-        // IN  = packet coming back into the TUN (dest is our TUN address)
         final boolean inbound = destIp.startsWith(TUN_PREFIX);
-        final boolean outbound = srcIp.startsWith(TUN_PREFIX) || !inbound;
 
-        // Normalize to: localPort + remoteIp + remotePort
         final String remoteIp;
         final int remotePort;
         final int localPort;
         final String localIp;
 
         if (inbound) {
-            // src = remote server, dest = local TUN
             remoteIp = srcIp;
             remotePort = srcPort;
             localPort = destPort;
             localIp = destIp;
         } else {
-            // src = local, dest = remote
             remoteIp = destIp;
             remotePort = destPort;
             localPort = srcPort;
             localIp = srcIp;
         }
 
-        // Skip pure internal junk
         if (remoteIp.startsWith(TUN_PREFIX)) return;
 
         String key = protoName + "|" + localPort + "|" + remoteIp + "|" + remotePort;
@@ -166,6 +160,36 @@ public class ConnectionTracker {
                 }
             }
         }
+    }
+
+    /**
+     * Used by forwarders to resolve owner UID for a 5-tuple-like key.
+     */
+    public int resolveUidForForward(int osProto, String localIp, int localPort,
+                                    String remoteIp, int remotePort) {
+        if (connectivityManager == null) return -1;
+        int uid = lookupOwnerUid(osProto, localIp, localPort, remoteIp, remotePort);
+        if (uid <= 0 || uid == android.os.Process.INVALID_UID) {
+            uid = lookupOwnerUid(osProto, remoteIp, remotePort, localIp, localPort);
+        }
+        if (uid > 0 && uid != android.os.Process.INVALID_UID) {
+            // Ensure package is registered for BlockManager
+            ConnectionInfo tmp = new ConnectionInfo(
+                    osProto == OsConstants.IPPROTO_TCP ? "TCP" : "UDP",
+                    remoteIp, remotePort, localPort);
+            tmp.uid = uid;
+            resolvePackage(tmp, uid);
+            return uid;
+        }
+        return -1;
+    }
+
+    public String getPackageForUid(int uid) {
+        return uidToPackage.get(uid);
+    }
+
+    public String getAppNameForUid(int uid) {
+        return uidToAppName.get(uid);
     }
 
     private void resolveUid(ConnectionInfo info, int protocol,
@@ -201,6 +225,7 @@ public class ConnectionTracker {
         if (uidToPackage.containsKey(uid)) {
             info.packageName = uidToPackage.get(uid);
             info.appName = uidToAppName.get(uid);
+            BlockManager.getInstance().registerUid(uid, info.packageName);
             return;
         }
         if (packageManager == null) return;
@@ -229,6 +254,8 @@ public class ConnectionTracker {
                 info.appName = chosen;
                 uidToAppName.put(uid, chosen);
             }
+
+            BlockManager.getInstance().registerUid(uid, chosen);
         } catch (Exception e) {
             Log.w(TAG, "resolvePackage failed for uid " + uid, e);
         }

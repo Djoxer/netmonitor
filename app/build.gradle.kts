@@ -12,8 +12,8 @@ android {
         applicationId = "dev.djoxer.netmonitor"
         minSdk = 30
         targetSdk = 37
-        versionCode = 7
-        versionName = "0.7.0"
+        versionCode = 8
+        versionName = "0.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -41,4 +41,11 @@ dependencies {
     androidTestImplementation(libs.ext.junit)
 
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
+
+    implementation("androidx.room:room-runtime:2.6.1")
+    annotationProcessor("androidx.room:room-compiler:2.6.1")
+
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
 }

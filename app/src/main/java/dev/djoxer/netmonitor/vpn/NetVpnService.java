@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.djoxer.netmonitor.MainActivity;
+import dev.djoxer.netmonitor.data.LogWriter;
+import dev.djoxer.netmonitor.data.RuleRepository;
 
 public class NetVpnService extends VpnService {
 
@@ -63,6 +65,9 @@ public class NetVpnService extends VpnService {
         tracker.init(getSystemService(ConnectivityManager.class), getPackageManager());
         udpForwarder = new UdpForwarder(this, tracker, running);
         tcpForwarder = new TcpForwarder(this, tracker, running);
+
+        LogWriter.getInstance().start(this);
+        new RuleRepository(this).loadIntoMemoryAsync(null);
     }
 
     @Override
@@ -131,6 +136,8 @@ public class NetVpnService extends VpnService {
                 if (length <= 0) continue;
 
                 tracker.onPacket(buffer, length);
+
+                // 1) Global block mode
                 if (blockMode) continue;
 
                 int version = (buffer[0] >> 4) & 0x0F;
@@ -169,6 +176,7 @@ public class NetVpnService extends VpnService {
     @Override
     public void onDestroy() {
         stopVpn();
+        LogWriter.getInstance().stop();
         super.onDestroy();
     }
 

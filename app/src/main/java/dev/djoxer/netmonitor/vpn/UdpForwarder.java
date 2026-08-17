@@ -1,6 +1,7 @@
 package dev.djoxer.netmonitor.vpn;
 
 import android.net.VpnService;
+import android.system.OsConstants;
 import android.util.Log;
 
 import java.io.FileOutputStream;
@@ -10,6 +11,9 @@ import java.net.InetAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import dev.djoxer.netmonitor.block.BlockManager;
+import dev.djoxer.netmonitor.data.LogWriter;
 
 public class UdpForwarder {
 
@@ -50,21 +54,56 @@ public class UdpForwarder {
             int payloadLen = length - payloadOffset;
             if (payloadLen <= 0) return;
 
+            String localIpStr = InetAddress.getByAddress(srcIp).getHostAddress();
             String remoteIp = InetAddress.getByAddress(dstIp).getHostAddress();
             String key = srcPort + "|" + remoteIp + "|" + dstPort;
 
             Session session = sessions.get(key);
             if (session == null) {
+                int uid = tracker.resolveUidForForward(
+                        OsConstants.IPPROTO_UDP,
+                        localIpStr, srcPort,
+                        remoteIp, dstPort);
+                String packageName = tracker.getPackageForUid(uid);
+                String appName = tracker.getAppNameForUid(uid);
+
+                if (uid > 0 && BlockManager.getInstance().shouldBlock(uid)) {
+                    LogWriter.getInstance().log(
+                            packageName, appName, "BLOCKED", "OUT",
+                            "UDP " + remoteIp + ":" + dstPort);
+                    return;
+                }
+                if (packageName != null
+                        && BlockManager.getInstance().shouldBlockPackage(packageName)) {
+                    LogWriter.getInstance().log(
+                            packageName, appName, "BLOCKED", "OUT",
+                            "UDP " + remoteIp + ":" + dstPort);
+                    return;
+                }
+
                 DatagramSocket socket = new DatagramSocket();
                 vpnService.protect(socket);
                 socket.connect(InetAddress.getByAddress(dstIp), dstPort);
 
-                session = new Session(socket, srcIp, srcPort, dstIp, dstPort, key);
+                session = new Session(socket, srcIp, srcPort, dstIp, dstPort, key, uid, packageName, appName);
                 sessions.put(key, session);
+
+                LogWriter.getInstance().log(
+                        packageName, appName, "CONNECT", "OUT",
+                        "UDP " + remoteIp + ":" + dstPort);
 
                 Thread t = new Thread(session, "UDP-" + key);
                 t.setDaemon(true);
                 t.start();
+            } else {
+                if (session.uid > 0 && BlockManager.getInstance().shouldBlock(session.uid)) {
+                    LogWriter.getInstance().log(
+                            session.packageName, session.appName, "BLOCKED", "OUT",
+                            "UDP session dropped " + remoteIp + ":" + dstPort);
+                    try { session.socket.close(); } catch (Exception ignored) {}
+                    sessions.remove(key);
+                    return;
+                }
             }
 
             byte[] payload = new byte[payloadLen];
@@ -89,15 +128,22 @@ public class UdpForwarder {
         final byte[] clientIp, remoteIp;
         final int clientPort, remotePort;
         final String key;
+        final int uid;
+        final String packageName;
+        final String appName;
 
         Session(DatagramSocket socket, byte[] clientIp, int clientPort,
-                byte[] remoteIp, int remotePort, String key) {
+                byte[] remoteIp, int remotePort, String key,
+                int uid, String packageName, String appName) {
             this.socket = socket;
             this.clientIp = clientIp;
             this.clientPort = clientPort;
             this.remoteIp = remoteIp;
             this.remotePort = remotePort;
             this.key = key;
+            this.uid = uid;
+            this.packageName = packageName;
+            this.appName = appName;
         }
 
         @Override
@@ -107,6 +153,11 @@ public class UdpForwarder {
                 while (running.get() && !socket.isClosed()) {
                     DatagramPacket packet = new DatagramPacket(buf, buf.length);
                     socket.receive(packet);
+
+                    if (uid > 0 && BlockManager.getInstance().shouldBlock(uid)) {
+                        break;
+                    }
+
                     byte[] response = PacketBuilder.buildUdp(
                             remoteIp, remotePort, clientIp, clientPort,
                             packet.getData(), packet.getOffset(), packet.getLength());

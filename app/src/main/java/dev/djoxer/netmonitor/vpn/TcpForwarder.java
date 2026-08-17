@@ -1,6 +1,7 @@
 package dev.djoxer.netmonitor.vpn;
 
 import android.net.VpnService;
+import android.system.OsConstants;
 import android.util.Log;
 
 import java.io.FileOutputStream;
@@ -15,10 +16,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import dev.djoxer.netmonitor.block.BlockManager;
+import dev.djoxer.netmonitor.data.LogWriter;
+
 public class TcpForwarder {
 
     private static final String TAG = "TcpForwarder";
-    private static final long SESSION_TIMEOUT_MS = 60_000; // 60s idle
+    private static final long SESSION_TIMEOUT_MS = 60_000;
     private static final int MAX_SESSIONS = 128;
 
     private final VpnService vpnService;
@@ -69,6 +73,7 @@ public class TcpForwarder {
             int payloadOffset = ipHeaderLen + dataOffset;
             int payloadLen = Math.max(0, length - payloadOffset);
 
+            String localIpStr = InetAddress.getByAddress(srcIp).getHostAddress();
             String remoteIp = InetAddress.getByAddress(dstIp).getHostAddress();
             String key = srcPort + "|" + remoteIp + "|" + dstPort;
 
@@ -91,6 +96,34 @@ public class TcpForwarder {
                     return;
                 }
 
+                // Resolve app + block check BEFORE connecting
+                int uid = tracker.resolveUidForForward(
+                        OsConstants.IPPROTO_TCP,
+                        localIpStr, srcPort,
+                        remoteIp, dstPort);
+                String packageName = tracker.getPackageForUid(uid);
+                String appName = tracker.getAppNameForUid(uid);
+
+                if (uid > 0 && BlockManager.getInstance().shouldBlock(uid)) {
+                    LogWriter.getInstance().log(
+                            packageName,
+                            appName,
+                            "BLOCKED",
+                            "OUT",
+                            "TCP " + remoteIp + ":" + dstPort);
+                    return;
+                }
+                if (packageName != null
+                        && BlockManager.getInstance().shouldBlockPackage(packageName)) {
+                    LogWriter.getInstance().log(
+                            packageName,
+                            appName,
+                            "BLOCKED",
+                            "OUT",
+                            "TCP " + remoteIp + ":" + dstPort);
+                    return;
+                }
+
                 try {
                     Socket socket = new Socket();
                     vpnService.protect(socket);
@@ -98,9 +131,16 @@ public class TcpForwarder {
                     socket.setTcpNoDelay(true);
                     socket.setSoTimeout(0);
 
-                    session = new Session(socket, srcIp, srcPort, dstIp, dstPort, seq, key);
+                    session = new Session(socket, srcIp, srcPort, dstIp, dstPort, seq, key, uid, packageName, appName);
                     sessions.put(key, session);
                     tracker.tcpSessionsCreated.incrementAndGet();
+
+                    LogWriter.getInstance().log(
+                            packageName,
+                            appName,
+                            "CONNECT",
+                            "OUT",
+                            "TCP " + remoteIp + ":" + dstPort);
 
                     byte[] synAck = PacketBuilder.buildTcp(
                             dstIp, dstPort, srcIp, srcPort,
@@ -117,6 +157,16 @@ public class TcpForwarder {
                     tracker.tcpConnectErrors.incrementAndGet();
                     Log.w(TAG, "TCP connect failed " + remoteIp + ":" + dstPort, e);
                 }
+                return;
+            }
+
+            // Existing session: re-check block (rule may have changed)
+            if (session.uid > 0 && BlockManager.getInstance().shouldBlock(session.uid)) {
+                LogWriter.getInstance().log(
+                        session.packageName, session.appName,
+                        "BLOCKED", "OUT", "TCP session dropped " + remoteIp + ":" + dstPort);
+                session.close();
+                sessions.remove(key);
                 return;
             }
 
@@ -190,13 +240,17 @@ public class TcpForwarder {
         final byte[] clientIp, remoteIp;
         final int clientPort, remotePort;
         final String key;
+        final int uid;
+        final String packageName;
+        final String appName;
 
         int clientSeq;
         int serverSeq;
         volatile long lastActivityMs;
 
         Session(Socket socket, byte[] clientIp, int clientPort,
-                byte[] remoteIp, int remotePort, int initialClientSeq, String key) throws Exception {
+                byte[] remoteIp, int remotePort, int initialClientSeq, String key,
+                int uid, String packageName, String appName) throws Exception {
             this.socket = socket;
             this.out = socket.getOutputStream();
             this.in = socket.getInputStream();
@@ -205,6 +259,9 @@ public class TcpForwarder {
             this.remoteIp = remoteIp;
             this.remotePort = remotePort;
             this.key = key;
+            this.uid = uid;
+            this.packageName = packageName;
+            this.appName = appName;
             this.clientSeq = initialClientSeq + 1;
             this.serverSeq = (int) (System.currentTimeMillis() & 0x7FFFFFFF);
             this.lastActivityMs = System.currentTimeMillis();
@@ -221,6 +278,10 @@ public class TcpForwarder {
                 while (running.get() && !socket.isClosed()) {
                     int read = in.read(buf);
                     if (read < 0) break;
+
+                    if (uid > 0 && BlockManager.getInstance().shouldBlock(uid)) {
+                        break;
+                    }
 
                     touch();
                     byte[] packet = PacketBuilder.buildTcp(
