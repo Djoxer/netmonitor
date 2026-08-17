@@ -5,10 +5,66 @@
     android:background="#121212"
     android:padding="16dp">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Settings – coming next (schedules, retention, …)"
-        android:textColor="#B0B0B0"
-        android:textSize="14sp" />
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Log"
+            android:textColor="#4CAF50"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:paddingBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnClearLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Clear event log" />
+
+        <Button
+            android:id="@+id/btnDeleteOldLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Delete logs older than 7 days" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Blocking"
+            android:textColor="#FF5722"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:paddingTop="20dp"
+            android:paddingBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnClearPermanentBlocks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Clear all permanent blocks" />
+
+        <Button
+            android:id="@+id/btnClearSchedules"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Clear all schedules" />
+
+        <Button
+            android:id="@+id/btnReloadRules"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Reload rules from database" />
+
+        <TextView
+            android:id="@+id/settingsStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#9E9E9E"
+            android:textSize="13sp"
+            android:paddingTop="16dp" />
+    </LinearLayout>
 </ScrollView>

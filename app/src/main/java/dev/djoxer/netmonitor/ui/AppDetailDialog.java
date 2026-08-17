@@ -200,6 +200,7 @@ public class AppDetailDialog extends DialogFragment {
         View form = LayoutInflater.from(requireContext())
                 .inflate(R.layout.dialog_add_schedule, null, false);
 
+        CheckBox dayAll = form.findViewById(R.id.dayAll);
         CheckBox[] days = {
                 form.findViewById(R.id.dayMon),
                 form.findViewById(R.id.dayTue),
@@ -211,6 +212,22 @@ public class AppDetailDialog extends DialogFragment {
         };
         EditText editStart = form.findViewById(R.id.editStart);
         EditText editEnd = form.findViewById(R.id.editEnd);
+
+        // All → check/uncheck every day
+        dayAll.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            for (CheckBox day : days) {
+                day.setOnCheckedChangeListener(null);
+                day.setChecked(isChecked);
+            }
+            for (CheckBox day : days) {
+                day.setOnCheckedChangeListener((b, checked) -> syncAllCheckbox(dayAll, days));
+            }
+        });
+
+        // Single day change → update All state
+        for (CheckBox day : days) {
+            day.setOnCheckedChangeListener((b, checked) -> syncAllCheckbox(dayAll, days));
+        }
 
         new AlertDialog.Builder(requireContext())
                 .setTitle("Add block schedule")
@@ -235,6 +252,27 @@ public class AppDetailDialog extends DialogFragment {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void syncAllCheckbox(CheckBox dayAll, CheckBox[] days) {
+        boolean allChecked = true;
+        for (CheckBox day : days) {
+            if (!day.isChecked()) {
+                allChecked = false;
+                break;
+            }
+        }
+        dayAll.setOnCheckedChangeListener(null);
+        dayAll.setChecked(allChecked);
+        dayAll.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            for (CheckBox d : days) {
+                d.setOnCheckedChangeListener(null);
+                d.setChecked(isChecked);
+            }
+            for (CheckBox d : days) {
+                d.setOnCheckedChangeListener((b, checked) -> syncAllCheckbox(dayAll, days));
+            }
+        });
     }
 
     private Integer parseTime(String text) {

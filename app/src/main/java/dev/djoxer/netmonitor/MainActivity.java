@@ -28,7 +28,7 @@ public class MainActivity extends FragmentActivity {
         } catch (Exception ignored) {}
 
         android.widget.TextView title = findViewById(R.id.titleText);
-        title.setText("NetMonitor  v" + version);
+        title.setText("NetMonitor");
 
         ViewPager2 pager = findViewById(R.id.viewPager);
         TabLayout tabs = findViewById(R.id.tabLayout);

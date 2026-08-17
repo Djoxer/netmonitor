@@ -14,27 +14,102 @@
             android:layout_height="wrap_content"
             android:text="Days"
             android:textStyle="bold"
-            android:paddingBottom="4dp" />
+            android:paddingBottom="8dp" />
 
+        <!-- Row 1: All, Mo, Tu, We -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:weightSum="4">
 
-            <CheckBox android:id="@+id/dayMon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Mo" />
-            <CheckBox android:id="@+id/dayTue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tu" />
-            <CheckBox android:id="@+id/dayWed" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="We" />
-            <CheckBox android:id="@+id/dayThu" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Th" />
-            <CheckBox android:id="@+id/dayFri" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fr" />
-            <CheckBox android:id="@+id/daySat" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sa" />
-            <CheckBox android:id="@+id/daySun" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Su" />
+            <CheckBox
+                android:id="@+id/dayAll"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="All"
+                android:textSize="13sp"
+                android:maxLines="1" />
+
+            <CheckBox
+                android:id="@+id/dayMon"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Mo"
+                android:textSize="13sp"
+                android:maxLines="1" />
+
+            <CheckBox
+                android:id="@+id/dayTue"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Tu"
+                android:textSize="13sp"
+                android:maxLines="1" />
+
+            <CheckBox
+                android:id="@+id/dayWed"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="We"
+                android:textSize="13sp"
+                android:maxLines="1" />
+        </LinearLayout>
+
+        <!-- Row 2: Th, Fr, Sa, Su -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="4"
+            android:paddingTop="4dp">
+
+            <CheckBox
+                android:id="@+id/dayThu"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Th"
+                android:textSize="13sp"
+                android:maxLines="1" />
+
+            <CheckBox
+                android:id="@+id/dayFri"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Fr"
+                android:textSize="13sp"
+                android:maxLines="1" />
+
+            <CheckBox
+                android:id="@+id/daySat"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Sa"
+                android:textSize="13sp"
+                android:maxLines="1" />
+
+            <CheckBox
+                android:id="@+id/daySun"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Su"
+                android:textSize="13sp"
+                android:maxLines="1" />
         </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Start (HH:mm)"
-            android:paddingTop="12dp" />
+            android:paddingTop="16dp" />
 
         <EditText
             android:id="@+id/editStart"
@@ -61,7 +136,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="If end &lt; start, the window spans midnight."
+            android:text="If end is before start, the window spans midnight."
             android:textSize="11sp"
             android:paddingTop="8dp" />
     </LinearLayout>

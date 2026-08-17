@@ -107,4 +107,50 @@ public class RuleRepository {
         }
         BlockManager.getInstance().setSchedules(packageName, list);
     }
+
+    public void clearPermanentBlocksAsync(Callback callback) {
+        IO.execute(() -> {
+            for (BlockRuleEntity r : db.blockRuleDao().getAll()) {
+                r.permanentlyBlocked = false;
+                db.blockRuleDao().upsert(r);
+            }
+            // Reload memory
+            Set<String> permanent = new HashSet<>();
+            Map<String, List<BlockSchedule>> scheduleMap = new HashMap<>();
+            for (ScheduleEntity s : db.scheduleDao().getAll()) {
+                scheduleMap.computeIfAbsent(s.packageName, k -> new ArrayList<>())
+                        .add(new BlockSchedule(s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
+            }
+            BlockManager.getInstance().loadFromDisk(permanent, scheduleMap);
+            if (callback != null) callback.onDone();
+        });
+    }
+
+    public void clearAllSchedulesAsync(Callback callback) {
+        IO.execute(() -> {
+            for (ScheduleEntity s : db.scheduleDao().getAll()) {
+                db.scheduleDao().deleteById(s.id);
+            }
+            Set<String> permanent = new HashSet<>();
+            for (BlockRuleEntity r : db.blockRuleDao().getAll()) {
+                if (r.permanentlyBlocked) permanent.add(r.packageName);
+            }
+            BlockManager.getInstance().loadFromDisk(permanent, new HashMap<>());
+            if (callback != null) callback.onDone();
+        });
+    }
+
+    public void clearLogAsync(Callback callback) {
+        IO.execute(() -> {
+            db.logEventDao().clear();
+            if (callback != null) callback.onDone();
+        });
+    }
+
+    public void deleteOldLogsAsync(long olderThanMillis, Callback callback) {
+        IO.execute(() -> {
+            db.logEventDao().deleteOlderThan(System.currentTimeMillis() - olderThanMillis);
+            if (callback != null) callback.onDone();
+        });
+    }
 }
