@@ -260,4 +260,37 @@ public class ConnectionTracker {
             Log.w(TAG, "resolvePackage failed for uid " + uid, e);
         }
     }
+
+    /**
+     * Account traffic that never appears on TUN read (userspace forwarder RX path).
+     */
+    public void addForwardedTraffic(String protocol, int localPort, String remoteIp, int remotePort,
+                                    long bytes, boolean inbound) {
+        if (remoteIp == null || localPort <= 0 || remotePort <= 0 || bytes <= 0) return;
+        if (remoteIp.startsWith(TUN_PREFIX)) return;
+
+        String key = protocol + "|" + localPort + "|" + remoteIp + "|" + remotePort;
+
+        synchronized (connections) {
+            ConnectionInfo info = connections.get(key);
+            if (info == null) {
+                info = new ConnectionInfo(protocol, remoteIp, remotePort, localPort);
+                connections.put(key, info);
+                if (info.hostname == null) {
+                    String host = hostnameResolver.getHostname(remoteIp);
+                    if (host != null) info.hostname = host;
+                }
+            } else {
+                info.packetCount++;
+            }
+
+            if (inbound) {
+                info.seenIn = true;
+                info.bytesIn += bytes;
+            } else {
+                info.seenOut = true;
+                info.bytesOut += bytes;
+            }
+        }
+    }
 }

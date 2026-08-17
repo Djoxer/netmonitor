@@ -291,6 +291,16 @@ public class TcpForwarder {
                     writeToTun(packet);
                     serverSeq += read;
                     tracker.tcpForwarded.addAndGet(read);
+
+                    // In-traffic: bytes from remote → device
+                    String remoteIpStr = InetAddress.getByAddress(remoteIp).getHostAddress();
+                    tracker.addForwardedTraffic(
+                            "TCP",
+                            clientPort,
+                            remoteIpStr,
+                            remotePort,
+                            read,
+                            true);
                 }
             } catch (Exception ignored) {
             } finally {

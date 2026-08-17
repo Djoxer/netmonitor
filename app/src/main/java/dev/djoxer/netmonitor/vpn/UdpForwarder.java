@@ -162,6 +162,15 @@ public class UdpForwarder {
                             remoteIp, remotePort, clientIp, clientPort,
                             packet.getData(), packet.getOffset(), packet.getLength());
                     writeToTun(response);
+
+                    String remoteIpStr = InetAddress.getByAddress(remoteIp).getHostAddress();
+                    tracker.addForwardedTraffic(
+                            "UDP",
+                            clientPort,
+                            remoteIpStr,
+                            remotePort,
+                            packet.getLength(),
+                            true);
                 }
             } catch (Exception ignored) {
             } finally {
