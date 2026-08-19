@@ -6,11 +6,24 @@
     android:padding="8dp"
     android:background="#121212">
 
+    <EditText
+        android:id="@+id/logSearch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Filter log…"
+        android:inputType="text"
+        android:maxLines="1"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#777777"
+        android:background="#1E1E1E"
+        android:padding="10dp" />
+
     <Button
         android:id="@+id/btnRefreshLog"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Refresh" />
+        android:text="Refresh"
+        android:layout_marginTop="6dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerLog"

@@ -8,10 +8,14 @@ import android.net.VpnService;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.Switch;
 import android.widget.TextView;
 
@@ -55,6 +59,10 @@ public class MonitorFragment extends Fragment {
     private long lastSampleBytesOut = -1;
     private long lastSampleBytesIn = -1;
     private long lastSampleTimeMs = 0;
+    private ProgressBar barIpv4;
+    private ProgressBar barIpv6;
+    private String appFilter = "";
+    private EditText appSearch;
 
     // tiny holder to avoid import cycle issues if RuleRepository path differs
     private dev.djoxer.netmonitor.data.RuleRepository ruleRepository;
@@ -86,6 +94,19 @@ public class MonitorFragment extends Fragment {
 
         outAdapter = new AppTileAdapter(AppTileAdapter.Mode.OUT, this::showAppDialog);
         inAdapter = new AppTileAdapter(AppTileAdapter.Mode.IN, this::showAppDialog);
+
+        barIpv4 = view.findViewById(R.id.barIpv4);
+        barIpv6 = view.findViewById(R.id.barIpv6);
+
+        appSearch = view.findViewById(R.id.appSearch);
+        appSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                appFilter = s != null ? s.toString().trim().toLowerCase(Locale.US) : "";
+                refreshLists();
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
 
         recyclerOut.setLayoutManager(new LinearLayoutManager(requireContext()));
         recyclerIn.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -158,8 +179,21 @@ public class MonitorFragment extends Fragment {
             }
         }
 
-        outAdapter.submit(new ArrayList<>(outMap.values()));
-        inAdapter.submit(new ArrayList<>(inMap.values()));
+        outAdapter.submit(filterGroups(new ArrayList<>(outMap.values())));
+        inAdapter.submit(filterGroups(new ArrayList<>(inMap.values())));
+    }
+
+    private List<AppGroup> filterGroups(List<AppGroup> src) {
+        if (appFilter == null || appFilter.isEmpty()) return src;
+        List<AppGroup> out = new ArrayList<>();
+        for (AppGroup g : src) {
+            String name = g.displayName != null ? g.displayName.toLowerCase(Locale.US) : "";
+            String pkg = g.packageName != null ? g.packageName.toLowerCase(Locale.US) : "";
+            if (name.contains(appFilter) || pkg.contains(appFilter) || g.key.toLowerCase(Locale.US).contains(appFilter)) {
+                out.add(g);
+            }
+        }
+        return out;
     }
 
     private void updateNetworkInfo() {
@@ -229,14 +263,19 @@ public class MonitorFragment extends Fragment {
         long sum = v4 + v6;
         if (sum <= 0) {
             ipStatsText.setText("IPv4 / IPv6: no traffic yet");
+            if (barIpv4 != null) barIpv4.setProgress(0);
+            if (barIpv6 != null) barIpv6.setProgress(0);
         } else {
             int pct6 = (int) Math.round(100.0 * v6 / sum);
+            int pct4 = 100 - pct6;
             ipStatsText.setText(String.format(
                     Locale.US,
                     "IPv6 share: %d%%   (v4 %s · v6 %s)",
                     pct6,
                     formatBytes(v4),
                     formatBytes(v6)));
+            if (barIpv4 != null) barIpv4.setProgress(pct4);
+            if (barIpv6 != null) barIpv6.setProgress(pct6);
         }
     }
 

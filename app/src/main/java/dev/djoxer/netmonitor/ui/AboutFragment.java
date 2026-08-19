@@ -56,6 +56,11 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.5.0
+            • IPv4/IPv6 share as progress bars on monitor
+            • App icons in log list
+            • Search filter for app tiles and log events
+            
             v1.4.0
             • Network type, provider, local IPv4/IPv6 on monitor
             • Live up/down speed from tracked traffic

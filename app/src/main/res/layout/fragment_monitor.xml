@@ -45,6 +45,46 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="IPv4"
+            android:textColor="#90CAF9"
+            android:textSize="11sp" />
+
+        <ProgressBar
+            android:id="@+id/barIpv4"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#2196F3" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="IPv6"
+            android:textColor="#A5D6A7"
+            android:textSize="11sp"
+            android:paddingTop="4dp" />
+
+        <ProgressBar
+            android:id="@+id/barIpv6"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#4CAF50" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
@@ -90,6 +130,19 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
     </LinearLayout>
+
+    <EditText
+        android:id="@+id/appSearch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Filter apps…"
+        android:inputType="text"
+        android:maxLines="1"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#777777"
+        android:background="#1E1E1E"
+        android:padding="10dp"
+        android:layout_marginBottom="6dp" />
 
     <LinearLayout
         android:layout_width="match_parent"

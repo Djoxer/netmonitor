@@ -1,10 +1,13 @@
 package dev.djoxer.netmonitor.ui;
 
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -35,12 +38,22 @@ public class LogFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         RecyclerView recycler = view.findViewById(R.id.recyclerLog);
         Button btnRefresh = view.findViewById(R.id.btnRefreshLog);
+        EditText search = view.findViewById(R.id.logSearch);
 
         adapter = new LogAdapter();
+        adapter.setPackageManager(requireContext().getPackageManager());
         recycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         recycler.setAdapter(adapter);
 
         btnRefresh.setOnClickListener(v -> loadLogs());
+        search.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                adapter.setFilter(s != null ? s.toString() : "");
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+
         loadLogs();
     }
 
