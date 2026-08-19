@@ -54,7 +54,7 @@ public class NetworkStatusHelper {
 
             if (caps != null) {
                 if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                    s.networkType = "Wi‑Fi";
+                    s.networkType = "Wi-Fi";
                     s.provider = wifiLabel(caps);
                 } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
                     s.networkType = "Mobile";

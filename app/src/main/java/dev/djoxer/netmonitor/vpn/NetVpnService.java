@@ -36,7 +36,7 @@ public class NetVpnService extends VpnService {
 
     private static final String CHANNEL_ID = "netmonitor_vpn";
     private static final int NOTIFICATION_ID = 1;
-
+    private static final AtomicBoolean SERVICE_RUNNING = new AtomicBoolean(false);
     private static volatile boolean blockMode = false;
     private static ConnectionTracker tracker = new ConnectionTracker();
 
@@ -46,6 +46,10 @@ public class NetVpnService extends VpnService {
 
     private UdpForwarder udpForwarder;
     private TcpForwarder tcpForwarder;
+
+    public static boolean isServiceRunning() {
+        return SERVICE_RUNNING.get();
+    }
 
     public static List<ConnectionInfo> getConnections() {
         return tracker.getConnections();
@@ -124,6 +128,7 @@ public class NetVpnService extends VpnService {
             }
 
             running.set(true);
+            SERVICE_RUNNING.set(true);
             udpForwarder.start();
             tcpForwarder.start();
 
@@ -233,6 +238,7 @@ public class NetVpnService extends VpnService {
             }
             vpnInterface = null;
         }
+        SERVICE_RUNNING.set(false);
     }
 
     @Override

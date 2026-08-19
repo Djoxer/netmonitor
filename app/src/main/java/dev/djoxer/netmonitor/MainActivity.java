@@ -2,7 +2,9 @@ package dev.djoxer.netmonitor;
 
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
+import android.content.res.Configuration;
 import android.os.Bundle;
+import android.view.Window;
 import android.view.animation.LinearInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -10,6 +12,8 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.material.tabs.TabLayout;
@@ -18,6 +22,7 @@ import com.google.android.material.tabs.TabLayoutMediator;
 import dev.djoxer.netmonitor.R;
 import dev.djoxer.netmonitor.ui.MainPagerAdapter;
 import dev.djoxer.netmonitor.util.ThemePrefs;
+import dev.djoxer.netmonitor.vpn.NetVpnService;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -35,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
         ThemePrefs.applyStored(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        applySystemBars();
 
         TextView title = findViewById(R.id.titleText);
         if (title != null) {
@@ -49,6 +55,22 @@ public class MainActivity extends AppCompatActivity {
         pager.setAdapter(new MainPagerAdapter(this));
         new TabLayoutMediator(tabs, pager, (tab, position) ->
                 tab.setText(TAB_TITLES[position])).attach();
+    }
+
+    private void applySystemBars() {
+        Window window = getWindow();
+        window.setStatusBarColor(ContextCompat.getColor(this, R.color.md_theme_surface));
+        window.setNavigationBarColor(ContextCompat.getColor(this, R.color.md_theme_background));
+
+        boolean lightTheme = (getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES;
+
+        WindowInsetsControllerCompat insets =
+                WindowCompat.getInsetsController(window, window.getDecorView());
+        if (insets != null) {
+            insets.setAppearanceLightStatusBars(lightTheme);      // dunkle Icons bei hellem BG
+            insets.setAppearanceLightNavigationBars(lightTheme);
+        }
     }
 
     public void setVpnStatus(int status) {
@@ -84,6 +106,22 @@ public class MainActivity extends AppCompatActivity {
             blinkAnimator = null;
         }
         if (headerStatusIcon != null) headerStatusIcon.setAlpha(1f);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        syncVpnStatusFromService();
+    }
+
+    public void syncVpnStatusFromService() {
+        if (!NetVpnService.isServiceRunning()) {
+            setVpnStatus(STATUS_STOPPED);
+        } else if (NetVpnService.isBlockMode()) {
+            setVpnStatus(STATUS_BLOCK);
+        } else {
+            setVpnStatus(STATUS_FORWARD);
+        }
     }
 
     @Override

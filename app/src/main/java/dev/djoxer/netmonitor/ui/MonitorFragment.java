@@ -15,7 +15,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ProgressBar;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 
@@ -34,6 +35,7 @@ import java.util.Map;
 import dev.djoxer.netmonitor.MainActivity;
 import dev.djoxer.netmonitor.R;
 import dev.djoxer.netmonitor.block.BlockManager;
+import dev.djoxer.netmonitor.data.RuleRepository;
 import dev.djoxer.netmonitor.network.NetworkStatusHelper;
 import dev.djoxer.netmonitor.vpn.ConnectionInfo;
 import dev.djoxer.netmonitor.vpn.ConnectionTracker;
@@ -43,29 +45,35 @@ public class MonitorFragment extends Fragment {
 
     private static final int REQUEST_VPN = 1001;
 
-    private TextView networkInfoText;
-    private TextView ipAddressText;
-    private TextView speedText;
-    private TextView ipStatsText;
     private Switch switchBlockMode;
+    private TextView terminalText;
+    private ScrollView terminalScroll;
+    private TextView labelIpv4;
+    private TextView labelIpv6;
+    private View barPartV4;
+    private View barPartV6;
+    private EditText appSearch;
+
     private AppTileAdapter outAdapter;
     private AppTileAdapter inAdapter;
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable refreshRunnable;
     private boolean pendingBlockMode;
+
+    private RuleRepository ruleRepository;
     private NetworkStatusHelper networkStatusHelper;
 
-    // Live speed: delta of tracked VPN bytes
+    private String appFilter = "";
+
+    // Live speed
     private long lastSampleBytesOut = -1;
     private long lastSampleBytesIn = -1;
     private long lastSampleTimeMs = 0;
-    private ProgressBar barIpv4;
-    private ProgressBar barIpv6;
-    private String appFilter = "";
-    private EditText appSearch;
+    private String lastRateLine = "up 0 B/s  down 0 B/s";
 
-    // tiny holder to avoid import cycle issues if RuleRepository path differs
-    private dev.djoxer.netmonitor.data.RuleRepository ruleRepository;
+    // Terminal prompt blink
+    private boolean promptVisible = true;
 
     @Nullable
     @Override
@@ -77,14 +85,18 @@ public class MonitorFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        ruleRepository = new dev.djoxer.netmonitor.data.RuleRepository(requireContext());
+        ruleRepository = new RuleRepository(requireContext());
         networkStatusHelper = new NetworkStatusHelper(requireContext());
 
-        networkInfoText = view.findViewById(R.id.networkInfoText);
-        ipAddressText = view.findViewById(R.id.ipAddressText);
-        speedText = view.findViewById(R.id.speedText);
-        ipStatsText = view.findViewById(R.id.ipStatsText);
         switchBlockMode = view.findViewById(R.id.switchBlockMode);
+        terminalText = view.findViewById(R.id.terminalText);
+        terminalScroll = view.findViewById(R.id.terminalScroll);
+        labelIpv4 = view.findViewById(R.id.labelIpv4);
+        labelIpv6 = view.findViewById(R.id.labelIpv6);
+        barPartV4 = view.findViewById(R.id.barPartV4);
+        barPartV6 = view.findViewById(R.id.barPartV6);
+        appSearch = view.findViewById(R.id.appSearch);
+
         Button btnStart = view.findViewById(R.id.btnStart);
         Button btnStop = view.findViewById(R.id.btnStop);
         Button btnClear = view.findViewById(R.id.btnClear);
@@ -94,19 +106,6 @@ public class MonitorFragment extends Fragment {
 
         outAdapter = new AppTileAdapter(AppTileAdapter.Mode.OUT, this::showAppDialog);
         inAdapter = new AppTileAdapter(AppTileAdapter.Mode.IN, this::showAppDialog);
-
-        barIpv4 = view.findViewById(R.id.barIpv4);
-        barIpv6 = view.findViewById(R.id.barIpv6);
-
-        appSearch = view.findViewById(R.id.appSearch);
-        appSearch.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
-                appFilter = s != null ? s.toString().trim().toLowerCase(Locale.US) : "";
-                refreshLists();
-            }
-            @Override public void afterTextChanged(Editable s) {}
-        });
 
         recyclerOut.setLayoutManager(new LinearLayoutManager(requireContext()));
         recyclerIn.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -120,12 +119,30 @@ public class MonitorFragment extends Fragment {
             lastSampleBytesOut = -1;
             lastSampleBytesIn = -1;
             lastSampleTimeMs = 0;
+            lastRateLine = "up 0 B/s  down 0 B/s";
             refreshLists();
         });
+
+        if (appSearch != null) {
+            appSearch.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    appFilter = s != null ? s.toString().trim().toLowerCase(Locale.US) : "";
+                    refreshLists();
+                }
+
+                @Override
+                public void afterTextChanged(Editable s) {}
+            });
+        }
 
         refreshRunnable = new Runnable() {
             @Override
             public void run() {
+                promptVisible = !promptVisible;
                 refreshLists();
                 handler.postDelayed(this, 1500);
             }
@@ -135,6 +152,9 @@ public class MonitorFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).syncVpnStatusFromService();
+        }
         handler.post(refreshRunnable);
     }
 
@@ -145,14 +165,13 @@ public class MonitorFragment extends Fragment {
     }
 
     private void refreshLists() {
-        updateNetworkInfo();
-        updateIpStats();
-        updateSpeed();
+        updateSpeedSample();
+        updateTerminal();
+        updateIpBars();
 
         List<ConnectionInfo> all = NetVpnService.getConnections();
         Map<String, AppGroup> outMap = new HashMap<>();
         Map<String, AppGroup> inMap = new HashMap<>();
-
         PackageManager pm = requireContext().getPackageManager();
 
         for (ConnectionInfo c : all) {
@@ -183,44 +202,67 @@ public class MonitorFragment extends Fragment {
         inAdapter.submit(filterGroups(new ArrayList<>(inMap.values())));
     }
 
-    private List<AppGroup> filterGroups(List<AppGroup> src) {
-        if (appFilter == null || appFilter.isEmpty()) return src;
-        List<AppGroup> out = new ArrayList<>();
-        for (AppGroup g : src) {
-            String name = g.displayName != null ? g.displayName.toLowerCase(Locale.US) : "";
-            String pkg = g.packageName != null ? g.packageName.toLowerCase(Locale.US) : "";
-            if (name.contains(appFilter) || pkg.contains(appFilter) || g.key.toLowerCase(Locale.US).contains(appFilter)) {
-                out.add(g);
+    // ------------------------------------------------------------------
+    // Terminal console
+    // ------------------------------------------------------------------
+
+    private static String ascii(String s) {
+        if (s == null) return "";
+        return s
+                .replace('\u2011', '-') // non-breaking hyphen
+                .replace('\u2010', '-')
+                .replace('\u2013', '-') // en-dash
+                .replace('\u2014', '-') // em-dash
+                .replace('\u00A0', ' '); // nbsp
+    }
+
+    private void updateTerminal() {
+        if (terminalText == null) return;
+
+        NetworkStatusHelper.Snapshot snap = networkStatusHelper.snapshot();
+        StringBuilder sb = new StringBuilder();
+        sb.append("+-- netmonitor console ---------------------------+\n");
+        String netLine = ascii(snap.networkType + " / " + snap.provider);
+        sb.append("| net : ").append(pad(netLine, 42)).append("|\n");
+
+        if (snap.ipv4.isEmpty()) {
+            sb.append("| IPv4: ").append(pad("–", 42)).append("|\n");
+        } else {
+            for (int i = 0; i < snap.ipv4.size(); i++) {
+                String label = (i == 0) ? "IPv4: " : "      ";
+                sb.append("| ").append(label).append(pad(snap.ipv4.get(i), 42)).append("|\n");
             }
         }
-        return out;
+
+        if (snap.ipv6.isEmpty()) {
+            sb.append("| IPv6: ").append(pad("–", 42)).append("|\n");
+        } else {
+            for (int i = 0; i < snap.ipv6.size(); i++) {
+                String label = (i == 0) ? "IPv6: " : "      ";
+                sb.append("| ").append(label).append(pad(snap.ipv6.get(i), 42)).append("|\n");
+            }
+        }
+
+        sb.append("| rate: ").append(pad(lastRateLine, 42)).append("|\n");
+        sb.append("+-------------------------------------------------+\n");
+        sb.append(promptVisible ? "netmonitor@device:~$ _" : "netmonitor@device:~$  ");
+
+        terminalText.setText(sb.toString());
     }
 
-    private void updateNetworkInfo() {
-        if (networkInfoText == null || ipAddressText == null) return;
-        NetworkStatusHelper.Snapshot snap = networkStatusHelper.snapshot();
-
-        networkInfoText.setText(String.format(Locale.US,
-                "Network: %s · %s", snap.networkType, snap.provider));
-
-        StringBuilder ips = new StringBuilder("IPs: ");
-        boolean any = false;
-        if (!snap.ipv4.isEmpty()) {
-            ips.append("v4 ").append(join(snap.ipv4, ", "));
-            any = true;
-        }
-        if (!snap.ipv6.isEmpty()) {
-            if (any) ips.append("  ·  ");
-            ips.append("v6 ").append(join(snap.ipv6, ", "));
-            any = true;
-        }
-        if (!any) ips.append("–");
-        ipAddressText.setText(ips.toString());
+    private static String pad(String s, int width) {
+        if (s == null) s = "";
+        if (s.length() > width) return s.substring(0, width);
+        StringBuilder b = new StringBuilder(s);
+        while (b.length() < width) b.append(' ');
+        return b.toString();
     }
 
-    private void updateSpeed() {
-        if (speedText == null) return;
+    // ------------------------------------------------------------------
+    // Speed
+    // ------------------------------------------------------------------
 
+    private void updateSpeedSample() {
         long totalOut = 0;
         long totalIn = 0;
         for (ConnectionInfo c : NetVpnService.getConnections()) {
@@ -233,7 +275,7 @@ public class MonitorFragment extends Fragment {
             lastSampleBytesOut = totalOut;
             lastSampleBytesIn = totalIn;
             lastSampleTimeMs = now;
-            speedText.setText("↑ 0 B/s   ↓ 0 B/s");
+            lastRateLine = "up 0 B/s  down 0 B/s";
             return;
         }
 
@@ -249,61 +291,60 @@ public class MonitorFragment extends Fragment {
         lastSampleBytesIn = totalIn;
         lastSampleTimeMs = now;
 
-        speedText.setText(String.format(Locale.US,
-                "↑ %s/s   ↓ %s/s",
-                formatRate(upBps),
-                formatRate(downBps)));
+        lastRateLine = "up " + formatRate(upBps) + "/s  down " + formatRate(downBps) + "/s";
     }
 
-    private void updateIpStats() {
-        if (ipStatsText == null) return;
+    // ------------------------------------------------------------------
+    // Fused IPv4 / IPv6 bar
+    // ------------------------------------------------------------------
+
+    private void updateIpBars() {
         ConnectionTracker t = NetVpnService.getTracker();
         long v4 = t.bytesIpv4.get();
         long v6 = t.bytesIpv6.get();
         long sum = v4 + v6;
-        if (sum <= 0) {
-            ipStatsText.setText("IPv4 / IPv6: no traffic yet");
-            if (barIpv4 != null) barIpv4.setProgress(0);
-            if (barIpv6 != null) barIpv6.setProgress(0);
-        } else {
-            int pct6 = (int) Math.round(100.0 * v6 / sum);
-            int pct4 = 100 - pct6;
-            ipStatsText.setText(String.format(
-                    Locale.US,
-                    "IPv6 share: %d%%   (v4 %s · v6 %s)",
-                    pct6,
-                    formatBytes(v4),
-                    formatBytes(v6)));
-            if (barIpv4 != null) barIpv4.setProgress(pct4);
-            if (barIpv6 != null) barIpv6.setProgress(pct6);
+
+        if (labelIpv4 != null) {
+            labelIpv4.setText("IPv4 (" + formatBytes(v4) + ")");
         }
+        if (labelIpv6 != null) {
+            labelIpv6.setText("(" + formatBytes(v6) + ") IPv6");
+        }
+
+        if (barPartV4 == null || barPartV6 == null) return;
+
+        LinearLayout.LayoutParams p4 =
+                (LinearLayout.LayoutParams) barPartV4.getLayoutParams();
+        LinearLayout.LayoutParams p6 =
+                (LinearLayout.LayoutParams) barPartV6.getLayoutParams();
+
+        if (sum <= 0) {
+            p4.weight = 1f;
+            p6.weight = 0f;
+        } else {
+            p4.weight = (float) v4;
+            p6.weight = (float) v6;
+        }
+        barPartV4.setLayoutParams(p4);
+        barPartV6.setLayoutParams(p6);
     }
 
-    private static String join(List<String> list, String sep) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < list.size(); i++) {
-            if (i > 0) sb.append(sep);
-            sb.append(list.get(i));
-            if (i >= 2 && list.size() > 3) {
-                sb.append(sep).append("…");
-                break;
+    // ------------------------------------------------------------------
+    // Groups / filter
+    // ------------------------------------------------------------------
+
+    private List<AppGroup> filterGroups(List<AppGroup> src) {
+        if (appFilter == null || appFilter.isEmpty()) return src;
+        List<AppGroup> out = new ArrayList<>();
+        for (AppGroup g : src) {
+            String name = g.displayName != null ? g.displayName.toLowerCase(Locale.US) : "";
+            String pkg = g.packageName != null ? g.packageName.toLowerCase(Locale.US) : "";
+            String key = g.key != null ? g.key.toLowerCase(Locale.US) : "";
+            if (name.contains(appFilter) || pkg.contains(appFilter) || key.contains(appFilter)) {
+                out.add(g);
             }
         }
-        return sb.toString();
-    }
-
-    private static String formatBytes(long bytes) {
-        if (bytes < 1024) return bytes + "B";
-        if (bytes < 1024 * 1024) return (bytes / 1024) + "KB";
-        return (bytes / (1024 * 1024)) + "MB";
-    }
-
-    private static String formatRate(long bytesPerSec) {
-        if (bytesPerSec < 1024) return bytesPerSec + " B";
-        if (bytesPerSec < 1024 * 1024) {
-            return String.format(Locale.US, "%.1f KB", bytesPerSec / 1024.0);
-        }
-        return String.format(Locale.US, "%.2f MB", bytesPerSec / (1024.0 * 1024.0));
+        return out;
     }
 
     private String groupKey(ConnectionInfo c) {
@@ -339,8 +380,12 @@ public class MonitorFragment extends Fragment {
                 .show(getParentFragmentManager(), "app_detail");
     }
 
+    // ------------------------------------------------------------------
+    // VPN control
+    // ------------------------------------------------------------------
+
     private void prepareAndStartVpn() {
-        pendingBlockMode = switchBlockMode.isChecked();
+        pendingBlockMode = switchBlockMode != null && switchBlockMode.isChecked();
         Intent prepare = VpnService.prepare(requireContext());
         if (prepare != null) {
             startActivityForResult(prepare, REQUEST_VPN);
@@ -385,5 +430,23 @@ public class MonitorFragment extends Fragment {
                 ((MainActivity) getActivity()).setVpnStatus(MainActivity.STATUS_STOPPED);
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Format helpers
+    // ------------------------------------------------------------------
+
+    private static String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + "B";
+        if (bytes < 1024 * 1024) return (bytes / 1024) + "KB";
+        return (bytes / (1024 * 1024)) + "MB";
+    }
+
+    private static String formatRate(long bytesPerSec) {
+        if (bytesPerSec < 1024) return bytesPerSec + " B";
+        if (bytesPerSec < 1024 * 1024) {
+            return String.format(Locale.US, "%.1f KB", bytesPerSec / 1024.0);
+        }
+        return String.format(Locale.US, "%.2f MB", bytesPerSec / (1024.0 * 1024.0));
     }
 }

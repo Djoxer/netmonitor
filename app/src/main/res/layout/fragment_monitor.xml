@@ -1,205 +1,209 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="8dp"
-    android:background="@color/md_theme_background">
-
-    <TextView
-        android:id="@+id/networkInfoText"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Network: –"
-        android:textColor="@color/md_theme_on_surface_variant"
-        android:textSize="12sp"
-        android:paddingBottom="2dp" />
-
-    <TextView
-        android:id="@+id/ipAddressText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="IPs: –"
-        android:textColor="@color/md_theme_on_surface_variant"
-        android:textSize="12sp"
-        android:paddingBottom="2dp" />
-
-    <TextView
-        android:id="@+id/speedText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="↑ 0 B/s   ↓ 0 B/s"
-        android:textColor="@color/md_theme_on_surface_variant"
-        android:textSize="12sp"
-        android:paddingBottom="4dp" />
-
-    <TextView
-        android:id="@+id/ipStatsText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="IPv4 / IPv6: –"
-        android:textColor="@color/md_theme_on_surface_variant"
-        android:textSize="12sp"
-        android:paddingBottom="8dp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:paddingBottom="8dp">
+        android:padding="8dp"
+        android:background="@color/md_theme_background">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="IPv4"
-            android:textColor="@color/md_theme_secondary"
-            android:textSize="11sp" />
-
-        <ProgressBar
-            android:id="@+id/barIpv4"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="8dp"
-            android:max="100"
-            android:progress="0"
-            android:progressTint="@color/bar_ipv4" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="IPv6"
-            android:textColor="@color/md_theme_primary"
-            android:textSize="11sp"
-            android:paddingTop="4dp" />
-
-        <ProgressBar
-            android:id="@+id/barIpv6"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="8dp"
-            android:max="100"
-            android:progress="0"
-            android:progressTint="@color/bar_ipv6" />
-    </LinearLayout>
-
+    <!-- Global block switch -->
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <Button
-            android:id="@+id/btnStart"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="6dp"
-            android:text="Start" />
-
-        <Button
-            android:id="@+id/btnStop"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="3dp"
-            android:layout_marginEnd="3dp"
-            android:text="Stop" />
-
-        <Button
-            android:id="@+id/btnClear"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="6dp"
-            android:text="Clear" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingTop="4dp"
-        android:paddingBottom="8dp"
-        android:gravity="center_vertical">
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="4dp">
 
         <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Global block mode"
-            android:textColor="@color/md_theme_on_surface_variant" />
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Global block mode"
+                android:textColor="@color/md_theme_on_surface_variant"
+                android:textSize="14sp" />
 
         <Switch
-            android:id="@+id/switchBlockMode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
+                android:id="@+id/switchBlockMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
     </LinearLayout>
 
-    <EditText
-        android:id="@+id/appSearch"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Filter apps…"
-        android:inputType="text"
-        android:maxLines="1"
-        android:textColor="@color/md_theme_on_surface"
-        android:textColorHint="#777777"
-        android:background="@color/md_theme_surface"
-        android:padding="10dp"
-        android:layout_marginBottom="6dp" />
-
+    <!-- Start / Stop / Clear -->
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="horizontal">
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="6dp">
 
-        <!-- OUT column -->
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:paddingEnd="4dp">
+        <Button
+                android:id="@+id/btnStart"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:text="Start" />
 
-            <TextView
+        <Button
+                android:id="@+id/btnStop"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:text="Stop" />
+
+        <Button
+                android:id="@+id/btnClear"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:text="Clear" />
+    </LinearLayout>
+
+    <!-- Terminal / console block -->
+    <ScrollView
+            android:id="@+id/terminalScroll"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:background="#000000"
+            android:fillViewport="true"
+            android:padding="8dp"
+            android:layout_marginBottom="8dp"
+            android:fadeScrollbars="false"
+            android:scrollbars="vertical">
+
+        <TextView
+                android:id="@+id/terminalText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="↑ Outgoing"
+                android:textColor="#00FF00"
+                android:textSize="11sp"
+                android:typeface="monospace"
+                android:lineSpacingExtra="1dp"
+                android:textIsSelectable="true"
+                android:text="+-- netmonitor console -----------------------------+\n| boot sequence complete                            |\n+--------------------------------------------------+\nnetmonitor@device:~$ " />
+    </ScrollView>
+
+    <!-- IPv4 / IPv6 labels -->
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="2dp">
+
+        <TextView
+                android:id="@+id/labelIpv4"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="IPv4 (0B)"
+                android:textColor="@color/bar_ipv4"
+                android:textSize="12sp" />
+
+        <TextView
+                android:id="@+id/labelIpv6"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="(0B) IPv6"
                 android:textColor="@color/bar_ipv6"
-                android:textStyle="bold"
-                android:gravity="center_horizontal"
-                android:textAlignment="center"
-                android:paddingBottom="4dp" />
+                android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Fused IP share bar -->
+    <LinearLayout
+            android:id="@+id/barIpMix"
+            android:layout_width="match_parent"
+            android:layout_height="10dp"
+            android:orientation="horizontal"
+            android:background="@color/md_theme_outline"
+            android:layout_marginBottom="8dp">
+
+        <View
+                android:id="@+id/barPartV4"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@color/bar_ipv4" />
+
+        <View
+                android:id="@+id/barPartV6"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0"
+                android:background="@color/bar_ipv6" />
+    </LinearLayout>
+
+    <!-- App filter -->
+    <EditText
+            android:id="@+id/appSearch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Filter apps…"
+            android:inputType="text"
+            android:maxLines="1"
+            android:textColor="@color/md_theme_on_surface"
+            android:textColorHint="@color/md_theme_on_surface_variant"
+            android:background="@color/md_theme_surface"
+            android:padding="10dp"
+            android:layout_marginBottom="6dp" />
+
+    <!-- Out / In columns -->
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+        <!-- OUT -->
+        <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingEnd="4dp">
+
+            <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="↑ Outgoing"
+                    android:textColor="@color/bar_ipv6"
+                    android:textStyle="bold"
+                    android:gravity="center_horizontal"
+                    android:textAlignment="center"
+                    android:paddingBottom="4dp" />
 
             <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerOut"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                    android:id="@+id/recyclerOut"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
         </LinearLayout>
 
-        <!-- IN column -->
+        <!-- IN -->
         <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:paddingStart="4dp">
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="4dp">
 
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="↓ Incoming"
-                android:textColor="@color/bar_ipv4"
-                android:textStyle="bold"
-                android:gravity="center_horizontal"
-                android:textAlignment="center"
-                android:paddingBottom="4dp" />
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="↓ Incoming"
+                    android:textColor="@color/bar_ipv4"
+                    android:textStyle="bold"
+                    android:gravity="center_horizontal"
+                    android:textAlignment="center"
+                    android:paddingBottom="4dp" />
 
             <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerIn"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                    android:id="@+id/recyclerIn"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
