@@ -101,7 +101,10 @@ public class AppDetailDialog extends DialogFragment {
 
         // Connections text
         StringBuilder sb = new StringBuilder();
+        int connCount = 0;
         if (group != null && group.connections != null) {
+            connCount = group.connections.size();
+            sb.append("Connections: ").append(connCount).append("\n\n");
             int n = 0;
             for (ConnectionInfo c : group.connections) {
                 sb.append(c.protocol).append(" ")
@@ -116,7 +119,9 @@ public class AppDetailDialog extends DialogFragment {
                 }
             }
         }
-        if (sb.length() == 0) sb.append("No connections.");
+        if (connCount == 0) {
+            sb.append("Connections: 0\n\nNo connections.");
+        }
         connections.setText(sb.toString());
 
         // Permanent block

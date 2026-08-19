@@ -51,9 +51,9 @@ public class AppTileAdapter extends RecyclerView.Adapter<AppTileAdapter.Holder> 
         h.name.setText(g.displayName);
 
         if (mode == Mode.OUT) {
-            h.stats.setText("↑ " + format(g.bytesOut) + "  ·  " + g.connCount + " conn");
+            h.stats.setText("↑ " + format(g.bytesOut));
         } else {
-            h.stats.setText("↓ " + format(g.bytesIn) + "  ·  " + g.connCount + " conn");
+            h.stats.setText("↓ " + format(g.bytesIn));
         }
 
         if (g.icon != null) {

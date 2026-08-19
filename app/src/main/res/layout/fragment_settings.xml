@@ -31,6 +31,18 @@
             android:layout_height="wrap_content"
             android:text="Delete logs older than 7 days" />
 
+        <Button
+            android:id="@+id/btnExportCsv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Export log as CSV" />
+
+        <Button
+            android:id="@+id/btnExportJson"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Export log as JSON" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
