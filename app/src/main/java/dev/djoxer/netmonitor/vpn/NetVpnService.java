@@ -108,6 +108,7 @@ public class NetVpnService extends VpnService {
             }
 
             running.set(true);
+            udpForwarder.start();
             tcpForwarder.start();
             updateNotification(blockMode ? "Block mode active" : "Forward mode (UDP+TCP)");
 

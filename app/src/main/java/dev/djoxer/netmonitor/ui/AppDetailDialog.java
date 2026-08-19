@@ -81,14 +81,14 @@ public class AppDetailDialog extends DialogFragment {
             blockKey = packageName;
         } else if (uid > 0) {
             blockKey = "uid:" + uid;
-        } else if (args != null && args.getString(ARG_KEY) != null) {
-            blockKey = args.getString(ARG_KEY);
+        } else if (args != null && args.getString(ARG_KEY) != null
+                && !args.getString(ARG_KEY).isEmpty()) {
+            blockKey = args.getString(ARG_KEY); // includes "unknown"
         } else {
-            blockKey = null;
+            blockKey = "unknown";
         }
 
-        final boolean canBlock = blockKey != null
-                && !blockKey.equals("unknown");
+        final boolean canBlock = blockKey != null && !blockKey.isEmpty();
 
         name.setText(displayName);
         pkg.setText(packageName != null ? packageName : "no package");
@@ -184,7 +184,7 @@ public class AppDetailDialog extends DialogFragment {
             blockKey = args != null ? args.getString(ARG_KEY) : null;
         }
 
-        if (blockKey == null || blockKey.equals("unknown") || scheduleAdapter == null) {
+        if (blockKey == null || blockKey.isEmpty() || scheduleAdapter == null) {
             if (scheduleAdapter != null) scheduleAdapter.submit(null);
             return;
         }
