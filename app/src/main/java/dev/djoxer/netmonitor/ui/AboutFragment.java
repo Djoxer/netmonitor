@@ -56,6 +56,13 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.7.0
+            • Terminal-style console on monitor (net, IPs, rate, prompt)
+            • Fused IPv4/IPv6 share bar with byte labels
+            • Light mode system bar icon contrast
+            • VPN header status synced when returning to the app
+            • ASCII-safe Wi-Fi strings for console alignment
+            
             v1.6.0
             • Material 3 DayNight theme (light / dark / system)
             • Theme switch in Settings
