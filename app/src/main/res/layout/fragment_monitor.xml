@@ -7,11 +7,39 @@
     android:background="#121212">
 
     <TextView
-        android:id="@+id/statusText"
+        android:id="@+id/networkInfoText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Status: stopped"
+        android:text="Network: –"
         android:textColor="#B0B0B0"
+        android:textSize="12sp"
+        android:paddingBottom="2dp" />
+
+    <TextView
+        android:id="@+id/ipAddressText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="IPs: –"
+        android:textColor="#9E9E9E"
+        android:textSize="12sp"
+        android:paddingBottom="2dp" />
+
+    <TextView
+        android:id="@+id/speedText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="↑ 0 B/s   ↓ 0 B/s"
+        android:textColor="#9E9E9E"
+        android:textSize="12sp"
+        android:paddingBottom="4dp" />
+
+    <TextView
+        android:id="@+id/ipStatsText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="IPv4 / IPv6: –"
+        android:textColor="#9E9E9E"
+        android:textSize="12sp"
         android:paddingBottom="8dp" />
 
     <LinearLayout

@@ -29,6 +29,8 @@ public class ConnectionTracker {
     public final AtomicLong tcpConnectErrors = new AtomicLong(0);
     public final AtomicLong tcpClientPayloads = new AtomicLong(0);
     public final AtomicLong packetsSeen = new AtomicLong(0);
+    public final AtomicLong bytesIpv4 = new AtomicLong(0);
+    public final AtomicLong bytesIpv6 = new AtomicLong(0);
 
     private final Map<Integer, String> uidToPackage = new HashMap<>();
     private final Map<Integer, String> uidToAppName = new HashMap<>();
@@ -72,6 +74,8 @@ public class ConnectionTracker {
         tcpConnectErrors.set(0);
         tcpClientPayloads.set(0);
         packetsSeen.set(0);
+        bytesIpv4.set(0);
+        bytesIpv6.set(0);
     }
 
     public void onPacket(byte[] data, int length) {
@@ -83,6 +87,12 @@ public class ConnectionTracker {
         IpPacket ip = IpPacket.parse(data, length);
         if (ip == null) return;
         if (ip.protocol != 6 && ip.protocol != 17) return;
+
+        if (ip.version == 6) {
+            bytesIpv6.addAndGet(length);
+        } else {
+            bytesIpv4.addAndGet(length);
+        }
 
         String protoName = ip.protocol == 6 ? "TCP" : "UDP";
         int osProto = ip.protocol == 6
@@ -256,6 +266,12 @@ public class ConnectionTracker {
                                     long bytes, boolean inbound) {
         if (remoteIp == null || localPort <= 0 || remotePort <= 0 || bytes <= 0) return;
         if (remoteIp.startsWith(TUN_PREFIX)) return;
+
+        if (remoteIp.indexOf(':') >= 0) {
+            bytesIpv6.addAndGet(bytes);
+        } else {
+            bytesIpv4.addAndGet(bytes);
+        }
 
         String key = protocol + "|" + localPort + "|" + remoteIp + "|" + remotePort;
 

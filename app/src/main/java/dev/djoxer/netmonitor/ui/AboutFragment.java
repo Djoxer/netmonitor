@@ -56,10 +56,16 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.4.0
+            • Network type, provider, local IPv4/IPv6 on monitor
+            • Live up/down speed from tracked traffic
+            • IPv6 share stats; IPv6 VPN route only if device has IPv6
+            • Header status icon (red stop / blinking play)
+            • Log export as CSV or JSON
+            
             v1.3.0
             • Export event log as CSV or JSON (share sheet)
             • App tiles: traffic only; connection count in detail dialog
-            • About: version history / patch notes
             
             v1.2.1
             • App tiles show only traffic volume (no connection count)

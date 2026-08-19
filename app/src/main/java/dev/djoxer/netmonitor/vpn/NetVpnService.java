@@ -15,6 +15,10 @@ import androidx.core.app.NotificationCompat;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -27,7 +31,7 @@ public class NetVpnService extends VpnService {
     private static final String TAG = "NetVpnService";
 
     public static final String ACTION_START = "dev.djoxer.netmonitor.START_VPN";
-    public static final String ACTION_STOP  = "dev.djoxer.netmonitor.STOP_VPN";
+    public static final String ACTION_STOP = "dev.djoxer.netmonitor.STOP_VPN";
     public static final String EXTRA_BLOCK_MODE = "block_mode";
 
     private static final String CHANNEL_ID = "netmonitor_vpn";
@@ -92,12 +96,24 @@ public class NetVpnService extends VpnService {
             Builder builder = new Builder();
             builder.setSession("NetMonitor");
             builder.setMtu(1500);
+
             builder.addAddress("10.0.0.2", 32);
             builder.addRoute("0.0.0.0", 0);
-            try {
-                builder.addAddress("fd00:1:fd00:1:fd00:1:fd00:1", 128);
-                builder.addRoute("::", 0);
-            } catch (Exception ignored) {}
+
+            boolean ipv6Added = false;
+            if (deviceHasIpv6Connectivity()) {
+                try {
+                    builder.addAddress("fd00:1:fd00:1:fd00:1:fd00:1", 128);
+                    builder.addRoute("::", 0);
+                    ipv6Added = true;
+                    Log.i(TAG, "IPv6 VPN address and default route enabled");
+                } catch (Exception e) {
+                    Log.w(TAG, "IPv6 VPN setup failed, continuing IPv4-only", e);
+                }
+            } else {
+                Log.i(TAG, "No device IPv6 connectivity – IPv4-only VPN");
+            }
+
             builder.addDisallowedApplication(getPackageName());
             builder.setBlocking(true);
 
@@ -110,7 +126,12 @@ public class NetVpnService extends VpnService {
             running.set(true);
             udpForwarder.start();
             tcpForwarder.start();
-            updateNotification(blockMode ? "Block mode active" : "Forward mode (UDP+TCP)");
+
+            String mode = blockMode ? "Block mode active" : "Forward mode (UDP+TCP)";
+            if (!ipv6Added) {
+                mode = mode + " · IPv4 only";
+            }
+            updateNotification(mode);
 
             captureThread = new Thread(this::captureLoop, "NetMonitor-Capture");
             captureThread.setPriority(Thread.MAX_PRIORITY);
@@ -120,6 +141,36 @@ public class NetVpnService extends VpnService {
             stopVpn();
             stopSelf();
         }
+    }
+
+    /**
+     * True if the device currently has a global (non-link-local) IPv6 address
+     * on an up network interface.
+     */
+    private boolean deviceHasIpv6Connectivity() {
+        try {
+            Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+            if (ifaces == null) return false;
+            while (ifaces.hasMoreElements()) {
+                NetworkInterface nif = ifaces.nextElement();
+                if (!nif.isUp() || nif.isLoopback()) continue;
+                Enumeration<InetAddress> addrs = nif.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    InetAddress addr = addrs.nextElement();
+                    if (addr instanceof Inet6Address) {
+                        Inet6Address v6 = (Inet6Address) addr;
+                        if (!v6.isLinkLocalAddress()
+                                && !v6.isLoopbackAddress()
+                                && !v6.isAnyLocalAddress()) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "IPv6 probe failed", e);
+        }
+        return false;
     }
 
     private void captureLoop() {
@@ -138,7 +189,6 @@ public class NetVpnService extends VpnService {
 
                 tracker.onPacket(buffer, length);
 
-                // 1) Global block mode
                 if (blockMode) continue;
 
                 IpPacket ip = IpPacket.parse(buffer, length);
@@ -154,8 +204,14 @@ public class NetVpnService extends VpnService {
         } catch (Exception e) {
             if (running.get()) Log.e(TAG, "captureLoop error", e);
         } finally {
-            try { if (in != null) in.close(); } catch (Exception ignored) {}
-            try { if (out != null) out.close(); } catch (Exception ignored) {}
+            try {
+                if (in != null) in.close();
+            } catch (Exception ignored) {
+            }
+            try {
+                if (out != null) out.close();
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -164,11 +220,17 @@ public class NetVpnService extends VpnService {
         if (udpForwarder != null) udpForwarder.shutdown();
         if (tcpForwarder != null) tcpForwarder.shutdown();
         if (captureThread != null) {
-            try { captureThread.join(2000); } catch (InterruptedException ignored) {}
+            try {
+                captureThread.join(2000);
+            } catch (InterruptedException ignored) {
+            }
             captureThread = null;
         }
         if (vpnInterface != null) {
-            try { vpnInterface.close(); } catch (Exception ignored) {}
+            try {
+                vpnInterface.close();
+            } catch (Exception ignored) {
+            }
             vpnInterface = null;
         }
     }

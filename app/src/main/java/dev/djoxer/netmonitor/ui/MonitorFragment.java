@@ -1,6 +1,5 @@
 package dev.djoxer.netmonitor.ui;
 
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -25,26 +24,40 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
+import dev.djoxer.netmonitor.MainActivity;
 import dev.djoxer.netmonitor.R;
 import dev.djoxer.netmonitor.block.BlockManager;
-import dev.djoxer.netmonitor.data.RuleRepository;
+import dev.djoxer.netmonitor.network.NetworkStatusHelper;
 import dev.djoxer.netmonitor.vpn.ConnectionInfo;
+import dev.djoxer.netmonitor.vpn.ConnectionTracker;
 import dev.djoxer.netmonitor.vpn.NetVpnService;
 
 public class MonitorFragment extends Fragment {
 
     private static final int REQUEST_VPN = 1001;
 
-    private TextView statusText;
+    private TextView networkInfoText;
+    private TextView ipAddressText;
+    private TextView speedText;
+    private TextView ipStatsText;
     private Switch switchBlockMode;
     private AppTileAdapter outAdapter;
     private AppTileAdapter inAdapter;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable refreshRunnable;
     private boolean pendingBlockMode;
-    private RuleRepository ruleRepository;
+    private NetworkStatusHelper networkStatusHelper;
+
+    // Live speed: delta of tracked VPN bytes
+    private long lastSampleBytesOut = -1;
+    private long lastSampleBytesIn = -1;
+    private long lastSampleTimeMs = 0;
+
+    // tiny holder to avoid import cycle issues if RuleRepository path differs
+    private dev.djoxer.netmonitor.data.RuleRepository ruleRepository;
 
     @Nullable
     @Override
@@ -56,9 +69,13 @@ public class MonitorFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        ruleRepository = new RuleRepository(requireContext());
+        ruleRepository = new dev.djoxer.netmonitor.data.RuleRepository(requireContext());
+        networkStatusHelper = new NetworkStatusHelper(requireContext());
 
-        statusText = view.findViewById(R.id.statusText);
+        networkInfoText = view.findViewById(R.id.networkInfoText);
+        ipAddressText = view.findViewById(R.id.ipAddressText);
+        speedText = view.findViewById(R.id.speedText);
+        ipStatsText = view.findViewById(R.id.ipStatsText);
         switchBlockMode = view.findViewById(R.id.switchBlockMode);
         Button btnStart = view.findViewById(R.id.btnStart);
         Button btnStop = view.findViewById(R.id.btnStop);
@@ -79,6 +96,9 @@ public class MonitorFragment extends Fragment {
         btnStop.setOnClickListener(v -> stopVpn());
         btnClear.setOnClickListener(v -> {
             NetVpnService.clearConnections();
+            lastSampleBytesOut = -1;
+            lastSampleBytesIn = -1;
+            lastSampleTimeMs = 0;
             refreshLists();
         });
 
@@ -104,6 +124,10 @@ public class MonitorFragment extends Fragment {
     }
 
     private void refreshLists() {
+        updateNetworkInfo();
+        updateIpStats();
+        updateSpeed();
+
         List<ConnectionInfo> all = NetVpnService.getConnections();
         Map<String, AppGroup> outMap = new HashMap<>();
         Map<String, AppGroup> inMap = new HashMap<>();
@@ -136,6 +160,111 @@ public class MonitorFragment extends Fragment {
 
         outAdapter.submit(new ArrayList<>(outMap.values()));
         inAdapter.submit(new ArrayList<>(inMap.values()));
+    }
+
+    private void updateNetworkInfo() {
+        if (networkInfoText == null || ipAddressText == null) return;
+        NetworkStatusHelper.Snapshot snap = networkStatusHelper.snapshot();
+
+        networkInfoText.setText(String.format(Locale.US,
+                "Network: %s · %s", snap.networkType, snap.provider));
+
+        StringBuilder ips = new StringBuilder("IPs: ");
+        boolean any = false;
+        if (!snap.ipv4.isEmpty()) {
+            ips.append("v4 ").append(join(snap.ipv4, ", "));
+            any = true;
+        }
+        if (!snap.ipv6.isEmpty()) {
+            if (any) ips.append("  ·  ");
+            ips.append("v6 ").append(join(snap.ipv6, ", "));
+            any = true;
+        }
+        if (!any) ips.append("–");
+        ipAddressText.setText(ips.toString());
+    }
+
+    private void updateSpeed() {
+        if (speedText == null) return;
+
+        long totalOut = 0;
+        long totalIn = 0;
+        for (ConnectionInfo c : NetVpnService.getConnections()) {
+            totalOut += c.bytesOut;
+            totalIn += c.bytesIn;
+        }
+
+        long now = System.currentTimeMillis();
+        if (lastSampleTimeMs <= 0 || lastSampleBytesOut < 0) {
+            lastSampleBytesOut = totalOut;
+            lastSampleBytesIn = totalIn;
+            lastSampleTimeMs = now;
+            speedText.setText("↑ 0 B/s   ↓ 0 B/s");
+            return;
+        }
+
+        double seconds = (now - lastSampleTimeMs) / 1000.0;
+        if (seconds < 0.3) return;
+
+        long dOut = Math.max(0, totalOut - lastSampleBytesOut);
+        long dIn = Math.max(0, totalIn - lastSampleBytesIn);
+        long upBps = (long) (dOut / seconds);
+        long downBps = (long) (dIn / seconds);
+
+        lastSampleBytesOut = totalOut;
+        lastSampleBytesIn = totalIn;
+        lastSampleTimeMs = now;
+
+        speedText.setText(String.format(Locale.US,
+                "↑ %s/s   ↓ %s/s",
+                formatRate(upBps),
+                formatRate(downBps)));
+    }
+
+    private void updateIpStats() {
+        if (ipStatsText == null) return;
+        ConnectionTracker t = NetVpnService.getTracker();
+        long v4 = t.bytesIpv4.get();
+        long v6 = t.bytesIpv6.get();
+        long sum = v4 + v6;
+        if (sum <= 0) {
+            ipStatsText.setText("IPv4 / IPv6: no traffic yet");
+        } else {
+            int pct6 = (int) Math.round(100.0 * v6 / sum);
+            ipStatsText.setText(String.format(
+                    Locale.US,
+                    "IPv6 share: %d%%   (v4 %s · v6 %s)",
+                    pct6,
+                    formatBytes(v4),
+                    formatBytes(v6)));
+        }
+    }
+
+    private static String join(List<String> list, String sep) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) sb.append(sep);
+            sb.append(list.get(i));
+            if (i >= 2 && list.size() > 3) {
+                sb.append(sep).append("…");
+                break;
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + "B";
+        if (bytes < 1024 * 1024) return (bytes / 1024) + "KB";
+        return (bytes / (1024 * 1024)) + "MB";
+    }
+
+    private static String formatRate(long bytesPerSec) {
+        if (bytesPerSec < 1024) return bytesPerSec + " B";
+        if (bytesPerSec < 1024 * 1024) {
+            return String.format(Locale.US, "%.1f KB", bytesPerSec / 1024.0);
+        }
+        return String.format(Locale.US, "%.2f MB", bytesPerSec / (1024.0 * 1024.0));
     }
 
     private String groupKey(ConnectionInfo c) {
@@ -186,18 +315,25 @@ public class MonitorFragment extends Fragment {
         intent.setAction(NetVpnService.ACTION_START);
         intent.putExtra(NetVpnService.EXTRA_BLOCK_MODE, pendingBlockMode);
         requireContext().startForegroundService(intent);
-        statusText.setText(pendingBlockMode
-                ? "Status: BLOCK mode"
-                : "Status: FORWARD mode");
-        statusText.setTextColor(pendingBlockMode ? 0xFFFF5722 : 0xFF4CAF50);
+
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).setVpnStatus(
+                    pendingBlockMode ? MainActivity.STATUS_BLOCK : MainActivity.STATUS_FORWARD);
+        }
+
+        lastSampleBytesOut = -1;
+        lastSampleBytesIn = -1;
+        lastSampleTimeMs = 0;
     }
 
     private void stopVpn() {
         Intent intent = new Intent(requireContext(), NetVpnService.class);
         intent.setAction(NetVpnService.ACTION_STOP);
         requireContext().startService(intent);
-        statusText.setText("Status: stopped");
-        statusText.setTextColor(0xFFB0B0B0);
+
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).setVpnStatus(MainActivity.STATUS_STOPPED);
+        }
     }
 
     @Override
@@ -206,8 +342,9 @@ public class MonitorFragment extends Fragment {
         if (requestCode == REQUEST_VPN && resultCode == android.app.Activity.RESULT_OK) {
             startVpnService();
         } else if (requestCode == REQUEST_VPN) {
-            statusText.setText("Status: permission denied");
-            statusText.setTextColor(0xFFFF0000);
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).setVpnStatus(MainActivity.STATUS_STOPPED);
+            }
         }
     }
 }

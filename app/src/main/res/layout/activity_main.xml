@@ -6,15 +6,36 @@
     android:orientation="vertical"
     android:background="#121212">
 
-    <TextView
-        android:id="@+id/titleText"
+    <!-- Header: title left, status icon right -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp"
-        android:text="NetMonitor"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="NetMonitor"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/headerStatusIcon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="end|center_vertical"
+            android:contentDescription="@string/app_name"
+            android:src="@android:drawable/ic_media_pause"
+            app:tint="#F44336" />
+    </LinearLayout>
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabLayout"
