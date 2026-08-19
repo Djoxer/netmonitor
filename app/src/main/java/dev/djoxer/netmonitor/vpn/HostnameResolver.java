@@ -2,19 +2,18 @@ package dev.djoxer.netmonitor.vpn;
 
 import android.util.Log;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Resolves IP → hostname via DNS response sniffing and TLS SNI.
+ * Supports IPv4 and IPv6 outer headers (no IPv6 extension headers).
  */
 public class HostnameResolver {
 
     private static final String TAG = "HostnameResolver";
 
-    // IP string → hostname
     private final Map<String, String> ipToHost = new ConcurrentHashMap<>();
 
     public String getHostname(String ip) {
@@ -23,7 +22,6 @@ public class HostnameResolver {
 
     public void put(String ip, String host) {
         if (ip == null || host == null || host.isEmpty()) return;
-        // ignore obvious junk
         if (host.endsWith(".local") || host.equals("localhost")) return;
         ipToHost.put(ip, host);
     }
@@ -36,46 +34,48 @@ public class HostnameResolver {
         ipToHost.clear();
     }
 
-    /**
-     * Inspect a raw IPv4 packet (full IP frame) for DNS answers or TLS SNI.
-     */
     public void inspectPacket(byte[] data, int length) {
         if (length < 20) return;
+
         int version = (data[0] >> 4) & 0x0F;
-        if (version != 4) return;
+        int ipHeaderLen;
+        int protocol;
 
-        int ipHeaderLen = (data[0] & 0x0F) * 4;
-        if (length < ipHeaderLen + 4) return;
+        if (version == 4) {
+            ipHeaderLen = (data[0] & 0x0F) * 4;
+            if (ipHeaderLen < 20 || length < ipHeaderLen + 4) return;
+            protocol = data[9] & 0xFF;
+        } else if (version == 6) {
+            if (length < 40) return;
+            ipHeaderLen = 40;
+            protocol = data[6] & 0xFF; // next header, no extension headers
+        } else {
+            return;
+        }
 
-        int protocol = data[9] & 0xFF;
-
-        if (protocol == 17) { // UDP – possible DNS
-            inspectDns(data, length, ipHeaderLen);
-        } else if (protocol == 6) { // TCP – possible TLS ClientHello
-            inspectTlsSni(data, length, ipHeaderLen);
+        if (protocol == 17) {
+            inspectDns(data, length, ipHeaderLen, version);
+        } else if (protocol == 6) {
+            inspectTlsSni(data, length, ipHeaderLen, version);
         }
     }
 
     // ---------------------------------------------------------------------
-    // DNS (UDP/53 responses)
+    // DNS
     // ---------------------------------------------------------------------
 
-    private void inspectDns(byte[] data, int length, int ipHeaderLen) {
+    private void inspectDns(byte[] data, int length, int ipHeaderLen, int version) {
         if (length < ipHeaderLen + 8 + 12) return;
 
         int srcPort = ((data[ipHeaderLen] & 0xFF) << 8) | (data[ipHeaderLen + 1] & 0xFF);
         int dstPort = ((data[ipHeaderLen + 2] & 0xFF) << 8) | (data[ipHeaderLen + 3] & 0xFF);
 
-        // DNS response usually comes FROM port 53
-        boolean fromDns = (srcPort == 53);
-        boolean toDns = (dstPort == 53);
-        if (!fromDns && !toDns) return;
+        if (srcPort != 53 && dstPort != 53) return;
 
         int dnsOffset = ipHeaderLen + 8;
         if (length < dnsOffset + 12) return;
 
         try {
-            // Only parse responses (QR bit = 1)
             int flags = ((data[dnsOffset + 2] & 0xFF) << 8) | (data[dnsOffset + 3] & 0xFF);
             boolean isResponse = (flags & 0x8000) != 0;
             if (!isResponse) return;
@@ -86,14 +86,12 @@ public class HostnameResolver {
 
             int pos = dnsOffset + 12;
 
-            // Skip questions
             for (int i = 0; i < questions; i++) {
                 pos = skipDnsName(data, length, pos);
                 if (pos < 0 || pos + 4 > length) return;
-                pos += 4; // type + class
+                pos += 4;
             }
 
-            // Parse answers – look for A records (type 1)
             for (int i = 0; i < answers; i++) {
                 int nameStart = pos;
                 pos = skipDnsName(data, length, pos);
@@ -102,15 +100,22 @@ public class HostnameResolver {
                 int type = ((data[pos] & 0xFF) << 8) | (data[pos + 1] & 0xFF);
                 int rdLength = ((data[pos + 8] & 0xFF) << 8) | (data[pos + 9] & 0xFF);
                 pos += 10;
-
                 if (pos + rdLength > length) return;
 
-                if (type == 1 && rdLength == 4) { // A record
-                    String ip = (data[pos] & 0xFF) + "." + (data[pos + 1] & 0xFF) + "." +
-                            (data[pos + 2] & 0xFF) + "." + (data[pos + 3] & 0xFF);
+                // A (1) or AAAA (28)
+                if (type == 1 && rdLength == 4) {
+                    String ip = (data[pos] & 0xFF) + "." + (data[pos + 1] & 0xFF) + "."
+                            + (data[pos + 2] & 0xFF) + "." + (data[pos + 3] & 0xFF);
                     String host = readDnsName(data, length, nameStart, dnsOffset);
-                    if (host != null && !host.isEmpty()) {
-                        put(ip, host);
+                    if (host != null && !host.isEmpty()) put(ip, host);
+                } else if (type == 28 && rdLength == 16) {
+                    byte[] addr = new byte[16];
+                    System.arraycopy(data, pos, addr, 0, 16);
+                    try {
+                        String ip = java.net.InetAddress.getByAddress(addr).getHostAddress();
+                        String host = readDnsName(data, length, nameStart, dnsOffset);
+                        if (host != null && !host.isEmpty()) put(ip, host);
+                    } catch (Exception ignored) {
                     }
                 }
                 pos += rdLength;
@@ -125,7 +130,6 @@ public class HostnameResolver {
         while (pos < length) {
             int label = data[pos] & 0xFF;
             if (label == 0) return pos + 1;
-            // compression pointer
             if ((label & 0xC0) == 0xC0) return pos + 2;
             pos += 1 + label;
             if (++jumps > 30) return -1;
@@ -160,10 +164,10 @@ public class HostnameResolver {
     }
 
     // ---------------------------------------------------------------------
-    // TLS SNI (ClientHello)
+    // TLS SNI
     // ---------------------------------------------------------------------
 
-    private void inspectTlsSni(byte[] data, int length, int ipHeaderLen) {
+    private void inspectTlsSni(byte[] data, int length, int ipHeaderLen, int version) {
         if (length < ipHeaderLen + 20) return;
 
         int dataOffset = ((data[ipHeaderLen + 12] & 0xF0) >> 4) * 4;
@@ -171,26 +175,27 @@ public class HostnameResolver {
         int payloadLen = length - payloadOffset;
         if (payloadLen < 40) return;
 
-        // TLS record: ContentType=0x16 (Handshake), version 0x0301..0x0303
         if ((data[payloadOffset] & 0xFF) != 0x16) return;
-        int tlsMajor = data[payloadOffset + 1] & 0xFF;
-        int tlsMinor = data[payloadOffset + 2] & 0xFF;
-        if (tlsMajor != 0x03) return;
+        if ((data[payloadOffset + 1] & 0xFF) != 0x03) return;
 
         int recordLen = ((data[payloadOffset + 3] & 0xFF) << 8) | (data[payloadOffset + 4] & 0xFF);
         int hsStart = payloadOffset + 5;
         if (hsStart + 4 > length) return;
-
-        // HandshakeType = 0x01 (ClientHello)
         if ((data[hsStart] & 0xFF) != 0x01) return;
 
         try {
             String sni = extractSni(data, hsStart, Math.min(length, hsStart + recordLen));
             if (sni == null || sni.isEmpty()) return;
 
-            // Destination IP of this packet is the server
-            String destIp = (data[16] & 0xFF) + "." + (data[17] & 0xFF) + "." +
-                    (data[18] & 0xFF) + "." + (data[19] & 0xFF);
+            String destIp;
+            if (version == 4) {
+                destIp = (data[16] & 0xFF) + "." + (data[17] & 0xFF) + "."
+                        + (data[18] & 0xFF) + "." + (data[19] & 0xFF);
+            } else {
+                byte[] addr = new byte[16];
+                System.arraycopy(data, 24, addr, 0, 16);
+                destIp = java.net.InetAddress.getByAddress(addr).getHostAddress();
+            }
             put(destIp, sni);
         } catch (Exception e) {
             Log.w(TAG, "SNI parse error", e);
@@ -198,13 +203,11 @@ public class HostnameResolver {
     }
 
     private String extractSni(byte[] data, int hsStart, int end) {
-        // ClientHello structure (after handshake header 4 bytes):
-        // bodyLen already in header; skip: version(2) random(32) sessionId sessionIdLen(1)
         int pos = hsStart + 4;
         if (pos + 2 + 32 + 1 > end) return null;
 
-        pos += 2;  // client version
-        pos += 32; // random
+        pos += 2;
+        pos += 32;
 
         int sessionIdLen = data[pos] & 0xFF;
         pos += 1 + sessionIdLen;
@@ -228,7 +231,7 @@ public class HostnameResolver {
             pos += 4;
             if (pos + len > extEnd) break;
 
-            if (type == 0x0000) { // server_name
+            if (type == 0x0000) {
                 return parseServerNameExtension(data, pos, pos + len);
             }
             pos += len;
@@ -247,7 +250,7 @@ public class HostnameResolver {
             int nameLen = ((data[pos + 1] & 0xFF) << 8) | (data[pos + 2] & 0xFF);
             pos += 3;
             if (pos + nameLen > listEnd) break;
-            if (nameType == 0) { // host_name
+            if (nameType == 0) {
                 return new String(data, pos, nameLen, StandardCharsets.UTF_8);
             }
             pos += nameLen;

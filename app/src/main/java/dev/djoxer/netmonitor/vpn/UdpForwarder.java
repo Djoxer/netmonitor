@@ -20,8 +20,10 @@ public class UdpForwarder {
 
     private static final String TAG = "UdpForwarder";
     private static final long SESSION_TIMEOUT_MS = 60_000;
+    private static final long DNS_TIMEOUT_MS = 10_000;
     private static final int MAX_SESSIONS = 128;
     private static final int CLEAN_INTERVAL_MS = 10_000;
+    private static final int RX_BUFFER = 2048;
 
     private final VpnService vpnService;
     private final ConnectionTracker tracker;
@@ -54,32 +56,30 @@ public class UdpForwarder {
 
     public void handlePacket(byte[] data, int length) {
         try {
-            int ipHeaderLen = (data[0] & 0x0F) * 4;
-            if (length < ipHeaderLen + 8) return;
+            IpPacket ip = IpPacket.parse(data, length);
+            if (ip == null || ip.protocol != 17) return;
+            if (length < ip.headerLength + 8) return;
 
-            byte[] srcIp = {data[12], data[13], data[14], data[15]};
-            int srcPort = ((data[ipHeaderLen] & 0xFF) << 8) | (data[ipHeaderLen + 1] & 0xFF);
-            byte[] dstIp = {data[16], data[17], data[18], data[19]};
-            int dstPort = ((data[ipHeaderLen + 2] & 0xFF) << 8) | (data[ipHeaderLen + 3] & 0xFF);
+            int srcPort = ((data[ip.headerLength] & 0xFF) << 8) | (data[ip.headerLength + 1] & 0xFF);
+            int dstPort = ((data[ip.headerLength + 2] & 0xFF) << 8) | (data[ip.headerLength + 3] & 0xFF);
 
-            int payloadOffset = ipHeaderLen + 8;
+            int payloadOffset = ip.headerLength + 8;
             int payloadLen = length - payloadOffset;
             if (payloadLen <= 0) return;
 
-            String localIpStr = ipv4String(srcIp);
-            String remoteIp = ipv4String(dstIp);
-            String key = srcPort + "|" + remoteIp + "|" + dstPort;
+            String remoteIp = ip.dstIpStr;
+            String key = ip.version + "|" + srcPort + "|" + remoteIp + "|" + dstPort;
 
             Session session = sessions.get(key);
             if (session == null) {
                 if (sessions.size() >= MAX_SESSIONS) {
-                    Log.w(TAG, "Max UDP sessions reached, dropping new flow");
+                    Log.w(TAG, "Max UDP sessions reached");
                     return;
                 }
 
                 int uid = tracker.resolveUidForForward(
                         OsConstants.IPPROTO_UDP,
-                        localIpStr, srcPort,
+                        ip.srcIpStr, srcPort,
                         remoteIp, dstPort);
                 String packageName = tracker.getPackageForUid(uid);
                 String appName = tracker.getAppNameForUid(uid);
@@ -89,25 +89,26 @@ public class UdpForwarder {
                     LogWriter.getInstance().log(
                             blockKey,
                             appName != null ? appName : blockKey,
-                            "BLOCKED",
-                            "OUT",
+                            "BLOCKED", "OUT",
                             "UDP " + remoteIp + ":" + dstPort);
                     return;
                 }
 
                 DatagramSocket socket = new DatagramSocket();
                 vpnService.protect(socket);
-                socket.connect(InetAddress.getByAddress(dstIp), dstPort);
+                socket.connect(InetAddress.getByAddress(ip.dstIp), dstPort);
 
-                session = new Session(socket, srcIp, srcPort, dstIp, dstPort, key,
-                        uid, packageName, appName, blockKey);
+                long idleTimeout = (dstPort == 53 || srcPort == 53)
+                        ? DNS_TIMEOUT_MS : SESSION_TIMEOUT_MS;
+
+                session = new Session(socket, ip.srcIp, srcPort, ip.dstIp, dstPort, key,
+                        uid, packageName, appName, blockKey, ip.version, idleTimeout);
                 sessions.put(key, session);
 
                 LogWriter.getInstance().log(
                         blockKey,
                         appName != null ? appName : blockKey,
-                        "CONNECT",
-                        "OUT",
+                        "CONNECT", "OUT",
                         "UDP " + remoteIp + ":" + dstPort);
 
                 Thread t = new Thread(session, "UDP-" + key);
@@ -118,8 +119,7 @@ public class UdpForwarder {
                     LogWriter.getInstance().log(
                             session.blockKey,
                             session.appName != null ? session.appName : session.blockKey,
-                            "BLOCKED",
-                            "OUT",
+                            "BLOCKED", "OUT",
                             "UDP session dropped " + remoteIp + ":" + dstPort);
                     session.close();
                     sessions.remove(key);
@@ -149,11 +149,6 @@ public class UdpForwarder {
         return blockKey != null && BlockManager.getInstance().shouldBlockPackage(blockKey);
     }
 
-    private static String ipv4String(byte[] ip) {
-        return (ip[0] & 0xFF) + "." + (ip[1] & 0xFF) + "."
-                + (ip[2] & 0xFF) + "." + (ip[3] & 0xFF);
-    }
-
     private void cleanupLoop() {
         while (running.get()) {
             try {
@@ -163,7 +158,7 @@ public class UdpForwarder {
                 while (it.hasNext()) {
                     Map.Entry<String, Session> e = it.next();
                     Session s = e.getValue();
-                    if (now - s.lastActivityMs > SESSION_TIMEOUT_MS) {
+                    if (now - s.lastActivityMs > s.idleTimeoutMs) {
                         Log.i(TAG, "UDP timeout " + e.getKey());
                         s.close();
                         it.remove();
@@ -197,13 +192,16 @@ public class UdpForwarder {
         final String packageName;
         final String appName;
         final String blockKey;
+        final int ipVersion;
+        final long idleTimeoutMs;
 
         volatile long lastActivityMs;
         boolean loggedFirstInbound;
 
         Session(DatagramSocket socket, byte[] clientIp, int clientPort,
                 byte[] remoteIp, int remotePort, String key,
-                int uid, String packageName, String appName, String blockKey) {
+                int uid, String packageName, String appName, String blockKey,
+                int ipVersion, long idleTimeoutMs) {
             this.socket = socket;
             this.clientIp = clientIp;
             this.clientPort = clientPort;
@@ -214,6 +212,8 @@ public class UdpForwarder {
             this.packageName = packageName;
             this.appName = appName;
             this.blockKey = blockKey;
+            this.ipVersion = ipVersion;
+            this.idleTimeoutMs = idleTimeoutMs;
             this.lastActivityMs = System.currentTimeMillis();
         }
 
@@ -230,44 +230,54 @@ public class UdpForwarder {
 
         @Override
         public void run() {
-            byte[] buf = new byte[65535];
+            byte[] buf = new byte[RX_BUFFER];
             try {
                 while (running.get() && !socket.isClosed()) {
                     DatagramPacket packet = new DatagramPacket(buf, buf.length);
                     socket.receive(packet);
                     touch();
 
+                    String remoteIpStr;
+                    try {
+                        remoteIpStr = InetAddress.getByAddress(remoteIp).getHostAddress();
+                    } catch (Exception e) {
+                        remoteIpStr = "?";
+                    }
+
                     if (!loggedFirstInbound) {
                         loggedFirstInbound = true;
-                        String remoteIpStr = ipv4String(remoteIp);
                         LogWriter.getInstance().log(
                                 blockKey,
                                 appName != null ? appName : blockKey,
-                                "RECV",
-                                "IN",
+                                "RECV", "IN",
                                 "UDP " + remoteIpStr + ":" + remotePort);
                     }
 
                     if (isBlocked(uid, blockKey)) {
-                        String remoteIpStr = ipv4String(remoteIp);
                         LogWriter.getInstance().log(
                                 blockKey,
                                 appName != null ? appName : blockKey,
-                                "BLOCKED",
-                                "IN",
+                                "BLOCKED", "IN",
                                 "UDP " + remoteIpStr + ":" + remotePort);
                         break;
                     }
 
-                    byte[] response = PacketBuilder.buildUdp(
-                            remoteIp, remotePort, clientIp, clientPort,
-                            packet.getData(), packet.getOffset(), packet.getLength());
+                    byte[] response;
+                    if (ipVersion == 6) {
+                        response = PacketBuilder.buildUdp6(
+                                remoteIp, remotePort, clientIp, clientPort,
+                                packet.getData(), packet.getOffset(), packet.getLength());
+                    } else {
+                        response = PacketBuilder.buildUdp(
+                                remoteIp, remotePort, clientIp, clientPort,
+                                packet.getData(), packet.getOffset(), packet.getLength());
+                    }
                     writeToTun(response);
 
                     tracker.addForwardedTraffic(
                             "UDP",
                             clientPort,
-                            ipv4String(remoteIp),
+                            remoteIpStr,
                             remotePort,
                             packet.getLength(),
                             true);

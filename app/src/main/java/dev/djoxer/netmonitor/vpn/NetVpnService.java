@@ -141,13 +141,12 @@ public class NetVpnService extends VpnService {
                 // 1) Global block mode
                 if (blockMode) continue;
 
-                int version = (buffer[0] >> 4) & 0x0F;
-                if (version != 4) continue;
+                IpPacket ip = IpPacket.parse(buffer, length);
+                if (ip == null) continue;
 
-                int protocol = buffer[9] & 0xFF;
-                if (protocol == 17) {
+                if (ip.protocol == 17) {
                     udpForwarder.handlePacket(buffer, length);
-                } else if (protocol == 6) {
+                } else if (ip.protocol == 6) {
                     tracker.tcpSeen.incrementAndGet();
                     tcpForwarder.handlePacket(buffer, length);
                 }

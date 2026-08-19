@@ -24,6 +24,7 @@ public class TcpForwarder {
     private static final String TAG = "TcpForwarder";
     private static final long SESSION_TIMEOUT_MS = 60_000;
     private static final int MAX_SESSIONS = 128;
+    private static final int RX_BUFFER = 2048;
 
     private final VpnService vpnService;
     private final ConnectionTracker tracker;
@@ -55,27 +56,25 @@ public class TcpForwarder {
 
     public void handlePacket(byte[] data, int length) {
         try {
-            int ipHeaderLen = (data[0] & 0x0F) * 4;
-            if (length < ipHeaderLen + 20) return;
+            IpPacket ip = IpPacket.parse(data, length);
+            if (ip == null || ip.protocol != 6) return;
+            if (length < ip.headerLength + 20) return;
 
-            byte[] srcIp = {data[12], data[13], data[14], data[15]};
-            byte[] dstIp = {data[16], data[17], data[18], data[19]};
-            int srcPort = ((data[ipHeaderLen] & 0xFF) << 8) | (data[ipHeaderLen + 1] & 0xFF);
-            int dstPort = ((data[ipHeaderLen + 2] & 0xFF) << 8) | (data[ipHeaderLen + 3] & 0xFF);
-            int seq = ByteBuffer.wrap(data, ipHeaderLen + 4, 4).getInt();
+            int srcPort = ((data[ip.headerLength] & 0xFF) << 8) | (data[ip.headerLength + 1] & 0xFF);
+            int dstPort = ((data[ip.headerLength + 2] & 0xFF) << 8) | (data[ip.headerLength + 3] & 0xFF);
+            int seq = ByteBuffer.wrap(data, ip.headerLength + 4, 4).getInt();
 
-            int dataOffset = ((data[ipHeaderLen + 12] & 0xF0) >> 4) * 4;
-            int flags = data[ipHeaderLen + 13] & 0xFF;
+            int dataOffset = ((data[ip.headerLength + 12] & 0xF0) >> 4) * 4;
+            int flags = data[ip.headerLength + 13] & 0xFF;
             boolean syn = (flags & 0x02) != 0;
             boolean fin = (flags & 0x01) != 0;
             boolean rst = (flags & 0x04) != 0;
 
-            int payloadOffset = ipHeaderLen + dataOffset;
+            int payloadOffset = ip.headerLength + dataOffset;
             int payloadLen = Math.max(0, length - payloadOffset);
 
-            String localIpStr = ipv4String(srcIp);
-            String remoteIp = ipv4String(dstIp);
-            String key = srcPort + "|" + remoteIp + "|" + dstPort;
+            String remoteIp = ip.dstIpStr;
+            String key = ip.version + "|" + srcPort + "|" + remoteIp + "|" + dstPort;
 
             Session session = sessions.get(key);
 
@@ -98,7 +97,7 @@ public class TcpForwarder {
 
                 int uid = tracker.resolveUidForForward(
                         OsConstants.IPPROTO_TCP,
-                        localIpStr, srcPort,
+                        ip.srcIpStr, srcPort,
                         remoteIp, dstPort);
                 String packageName = tracker.getPackageForUid(uid);
                 String appName = tracker.getAppNameForUid(uid);
@@ -108,8 +107,7 @@ public class TcpForwarder {
                     LogWriter.getInstance().log(
                             blockKey,
                             appName != null ? appName : blockKey,
-                            "BLOCKED",
-                            "OUT",
+                            "BLOCKED", "OUT",
                             "TCP " + remoteIp + ":" + dstPort);
                     return;
                 }
@@ -117,24 +115,23 @@ public class TcpForwarder {
                 try {
                     Socket socket = new Socket();
                     vpnService.protect(socket);
-                    socket.connect(new InetSocketAddress(InetAddress.getByAddress(dstIp), dstPort), 10000);
+                    socket.connect(new InetSocketAddress(InetAddress.getByAddress(ip.dstIp), dstPort), 10000);
                     socket.setTcpNoDelay(true);
                     socket.setSoTimeout(0);
 
-                    session = new Session(socket, srcIp, srcPort, dstIp, dstPort, seq, key,
-                            uid, packageName, appName, blockKey);
+                    session = new Session(socket, ip.srcIp, srcPort, ip.dstIp, dstPort, seq, key,
+                            uid, packageName, appName, blockKey, ip.version);
                     sessions.put(key, session);
                     tracker.tcpSessionsCreated.incrementAndGet();
 
                     LogWriter.getInstance().log(
                             blockKey,
                             appName != null ? appName : blockKey,
-                            "CONNECT",
-                            "OUT",
+                            "CONNECT", "OUT",
                             "TCP " + remoteIp + ":" + dstPort);
 
-                    byte[] synAck = PacketBuilder.buildTcp(
-                            dstIp, dstPort, srcIp, srcPort,
+                    byte[] synAck = buildTcpReply(
+                            session, ip.version,
                             session.serverSeq, seq + 1,
                             (byte) 0x12, null, 0, 0, true);
                     writeToTun(synAck);
@@ -151,13 +148,11 @@ public class TcpForwarder {
                 return;
             }
 
-            // Existing session
             if (isBlocked(session.uid, session.blockKey)) {
                 LogWriter.getInstance().log(
                         session.blockKey,
                         session.appName != null ? session.appName : session.blockKey,
-                        "BLOCKED",
-                        "OUT",
+                        "BLOCKED", "OUT",
                         "TCP session dropped " + remoteIp + ":" + dstPort);
                 session.close();
                 sessions.remove(key);
@@ -178,8 +173,8 @@ public class TcpForwarder {
                 session.clientSeq = Math.max(session.clientSeq, seq);
             }
 
-            byte[] ackPkt = PacketBuilder.buildTcp(
-                    dstIp, dstPort, srcIp, srcPort,
+            byte[] ackPkt = buildTcpReply(
+                    session, session.ipVersion,
                     session.serverSeq, session.clientSeq,
                     (byte) 0x10, null, 0, 0, false);
             writeToTun(ackPkt);
@@ -193,6 +188,21 @@ public class TcpForwarder {
         }
     }
 
+    private byte[] buildTcpReply(Session session, int ipVersion,
+                                 int seq, int ack, byte flags,
+                                 byte[] payload, int off, int len, boolean withMss) {
+        if (ipVersion == 6) {
+            return PacketBuilder.buildTcp6(
+                    session.remoteIp, session.remotePort,
+                    session.clientIp, session.clientPort,
+                    seq, ack, flags, payload, off, len, withMss);
+        }
+        return PacketBuilder.buildTcp(
+                session.remoteIp, session.remotePort,
+                session.clientIp, session.clientPort,
+                seq, ack, flags, payload, off, len, withMss);
+    }
+
     private static String blockKeyFor(int uid, String packageName) {
         if (packageName != null && !packageName.isEmpty()) return packageName;
         if (uid > 0) return "uid:" + uid;
@@ -202,11 +212,6 @@ public class TcpForwarder {
     private static boolean isBlocked(int uid, String blockKey) {
         if (uid > 0 && BlockManager.getInstance().shouldBlock(uid)) return true;
         return blockKey != null && BlockManager.getInstance().shouldBlockPackage(blockKey);
-    }
-
-    private static String ipv4String(byte[] ip) {
-        return (ip[0] & 0xFF) + "." + (ip[1] & 0xFF) + "."
-                + (ip[2] & 0xFF) + "." + (ip[3] & 0xFF);
     }
 
     private void cleanupLoop() {
@@ -254,6 +259,7 @@ public class TcpForwarder {
         final String packageName;
         final String appName;
         final String blockKey;
+        final int ipVersion;
 
         int clientSeq;
         int serverSeq;
@@ -262,7 +268,8 @@ public class TcpForwarder {
 
         Session(Socket socket, byte[] clientIp, int clientPort,
                 byte[] remoteIp, int remotePort, int initialClientSeq, String key,
-                int uid, String packageName, String appName, String blockKey) throws Exception {
+                int uid, String packageName, String appName, String blockKey,
+                int ipVersion) throws Exception {
             this.socket = socket;
             this.out = socket.getOutputStream();
             this.in = socket.getInputStream();
@@ -275,6 +282,7 @@ public class TcpForwarder {
             this.packageName = packageName;
             this.appName = appName;
             this.blockKey = blockKey;
+            this.ipVersion = ipVersion;
             this.clientSeq = initialClientSeq + 1;
             this.serverSeq = (int) (System.currentTimeMillis() & 0x7FFFFFFF);
             this.lastActivityMs = System.currentTimeMillis();
@@ -286,37 +294,40 @@ public class TcpForwarder {
 
         @Override
         public void run() {
-            byte[] buf = new byte[16384];
+            byte[] buf = new byte[RX_BUFFER];
             try {
                 while (running.get() && !socket.isClosed()) {
                     int read = in.read(buf);
                     if (read < 0) break;
 
+                    String remoteIpStr;
+                    try {
+                        remoteIpStr = InetAddress.getByAddress(remoteIp).getHostAddress();
+                    } catch (Exception e) {
+                        remoteIpStr = "?";
+                    }
+
                     if (!loggedFirstInbound) {
                         loggedFirstInbound = true;
-                        String remoteIpStr = ipv4String(remoteIp);
                         LogWriter.getInstance().log(
                                 blockKey,
                                 appName != null ? appName : blockKey,
-                                "RECV",
-                                "IN",
+                                "RECV", "IN",
                                 "TCP " + remoteIpStr + ":" + remotePort);
                     }
 
                     if (isBlocked(uid, blockKey)) {
-                        String remoteIpStr = ipv4String(remoteIp);
                         LogWriter.getInstance().log(
                                 blockKey,
                                 appName != null ? appName : blockKey,
-                                "BLOCKED",
-                                "IN",
+                                "BLOCKED", "IN",
                                 "TCP " + remoteIpStr + ":" + remotePort);
                         break;
                     }
 
                     touch();
-                    byte[] packet = PacketBuilder.buildTcp(
-                            remoteIp, remotePort, clientIp, clientPort,
+                    byte[] packet = buildTcpReply(
+                            this, ipVersion,
                             serverSeq, clientSeq,
                             (byte) 0x18, buf, 0, read, false);
                     writeToTun(packet);
@@ -326,7 +337,7 @@ public class TcpForwarder {
                     tracker.addForwardedTraffic(
                             "TCP",
                             clientPort,
-                            ipv4String(remoteIp),
+                            remoteIpStr,
                             remotePort,
                             read,
                             true);

@@ -6,6 +6,8 @@ public final class PacketBuilder {
 
     private PacketBuilder() {}
 
+    // -------------------- IPv4 --------------------
+
     public static byte[] buildUdp(byte[] srcIp, int srcPort,
                                   byte[] dstIp, int dstPort,
                                   byte[] payload, int offset, int len) {
@@ -28,11 +30,17 @@ public final class PacketBuilder {
         packet[10] = (byte) (ipCs >> 8);
         packet[11] = (byte) ipCs;
 
+        int udpStart = 20;
         buf.putShort((short) srcPort);
         buf.putShort((short) dstPort);
         buf.putShort((short) (8 + len));
         buf.putShort((short) 0);
         buf.put(payload, offset, len);
+
+        int udpCs = ChecksumUtils.transportChecksumV4(srcIp, dstIp, 17, packet, udpStart, 8 + len);
+        if (udpCs == 0) udpCs = 0xFFFF;
+        packet[udpStart + 6] = (byte) (udpCs >> 8);
+        packet[udpStart + 7] = (byte) udpCs;
 
         return packet;
     }
@@ -44,13 +52,11 @@ public final class PacketBuilder {
                                   byte[] payload, int offset, int len,
                                   boolean withMss) {
         if (payload == null) len = 0;
-
         int tcpHeaderLen = withMss ? 24 : 20;
         int totalLen = 20 + tcpHeaderLen + len;
         byte[] packet = new byte[totalLen];
         ByteBuffer buf = ByteBuffer.wrap(packet);
 
-        // IP
         buf.put((byte) 0x45);
         buf.put((byte) 0);
         buf.putShort((short) totalLen);
@@ -66,7 +72,6 @@ public final class PacketBuilder {
         packet[10] = (byte) (ipCs >> 8);
         packet[11] = (byte) ipCs;
 
-        // TCP
         int tcpStart = 20;
         buf.position(tcpStart);
         buf.putShort((short) srcPort);
@@ -84,12 +89,93 @@ public final class PacketBuilder {
             buf.put((byte) 4);
             buf.putShort((short) 1460);
         }
+        if (len > 0) buf.put(payload, offset, len);
 
-        if (len > 0) {
-            buf.put(payload, offset, len);
+        int tcpCs = ChecksumUtils.transportChecksumV4(srcIp, dstIp, 6, packet, tcpStart, tcpHeaderLen + len);
+        packet[tcpStart + 16] = (byte) (tcpCs >> 8);
+        packet[tcpStart + 17] = (byte) tcpCs;
+
+        return packet;
+    }
+
+    // -------------------- IPv6 --------------------
+
+    public static byte[] buildUdp6(byte[] srcIp, int srcPort,
+                                   byte[] dstIp, int dstPort,
+                                   byte[] payload, int offset, int len) {
+        int payloadLen = 8 + len;
+        int totalLen = 40 + payloadLen;
+        byte[] packet = new byte[totalLen];
+        ByteBuffer buf = ByteBuffer.wrap(packet);
+
+        buf.put((byte) 0x60); // version 6
+        buf.put((byte) 0);
+        buf.put((byte) 0);
+        buf.put((byte) 0);
+        buf.putShort((short) payloadLen);
+        buf.put((byte) 17); // next header UDP
+        buf.put((byte) 64); // hop limit
+        buf.put(srcIp);
+        buf.put(dstIp);
+
+        int udpStart = 40;
+        buf.putShort((short) srcPort);
+        buf.putShort((short) dstPort);
+        buf.putShort((short) payloadLen);
+        buf.putShort((short) 0);
+        buf.put(payload, offset, len);
+
+        int udpCs = ChecksumUtils.transportChecksumV6(srcIp, dstIp, 17, packet, udpStart, payloadLen);
+        if (udpCs == 0) udpCs = 0xFFFF;
+        packet[udpStart + 6] = (byte) (udpCs >> 8);
+        packet[udpStart + 7] = (byte) udpCs;
+
+        return packet;
+    }
+
+    public static byte[] buildTcp6(byte[] srcIp, int srcPort,
+                                   byte[] dstIp, int dstPort,
+                                   int seq, int ack,
+                                   byte flags,
+                                   byte[] payload, int offset, int len,
+                                   boolean withMss) {
+        if (payload == null) len = 0;
+        int tcpHeaderLen = withMss ? 24 : 20;
+        int payloadLen = tcpHeaderLen + len;
+        int totalLen = 40 + payloadLen;
+        byte[] packet = new byte[totalLen];
+        ByteBuffer buf = ByteBuffer.wrap(packet);
+
+        buf.put((byte) 0x60);
+        buf.put((byte) 0);
+        buf.put((byte) 0);
+        buf.put((byte) 0);
+        buf.putShort((short) payloadLen);
+        buf.put((byte) 6); // TCP
+        buf.put((byte) 64);
+        buf.put(srcIp);
+        buf.put(dstIp);
+
+        int tcpStart = 40;
+        buf.position(tcpStart);
+        buf.putShort((short) srcPort);
+        buf.putShort((short) dstPort);
+        buf.putInt(seq);
+        buf.putInt(ack);
+        buf.put((byte) ((tcpHeaderLen / 4) << 4));
+        buf.put(flags);
+        buf.putShort((short) 65535);
+        buf.putShort((short) 0);
+        buf.putShort((short) 0);
+
+        if (withMss) {
+            buf.put((byte) 2);
+            buf.put((byte) 4);
+            buf.putShort((short) 1440);
         }
+        if (len > 0) buf.put(payload, offset, len);
 
-        int tcpCs = ChecksumUtils.tcpChecksum(srcIp, dstIp, packet, tcpStart, tcpHeaderLen + len);
+        int tcpCs = ChecksumUtils.transportChecksumV6(srcIp, dstIp, 6, packet, tcpStart, payloadLen);
         packet[tcpStart + 16] = (byte) (tcpCs >> 8);
         packet[tcpStart + 17] = (byte) tcpCs;
 

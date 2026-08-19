@@ -80,53 +80,41 @@ public class ConnectionTracker {
 
         hostnameResolver.inspectPacket(data, length);
 
-        int version = (data[0] >> 4) & 0x0F;
-        if (version != 4) return;
+        IpPacket ip = IpPacket.parse(data, length);
+        if (ip == null) return;
+        if (ip.protocol != 6 && ip.protocol != 17) return;
 
-        int headerLength = (data[0] & 0x0F) * 4;
-        if (length < headerLength + 4) return;
+        String protoName = ip.protocol == 6 ? "TCP" : "UDP";
+        int osProto = ip.protocol == 6
+                ? android.system.OsConstants.IPPROTO_TCP
+                : android.system.OsConstants.IPPROTO_UDP;
 
-        int protocol = data[9] & 0xFF;
-        String protoName;
-        int osProto;
-        if (protocol == 6) {
-            protoName = "TCP";
-            osProto = OsConstants.IPPROTO_TCP;
-        } else if (protocol == 17) {
-            protoName = "UDP";
-            osProto = OsConstants.IPPROTO_UDP;
-        } else {
-            return;
-        }
+        if (length < ip.headerLength + 4) return;
 
-        String srcIp = (data[12] & 0xFF) + "." + (data[13] & 0xFF) + "." +
-                (data[14] & 0xFF) + "." + (data[15] & 0xFF);
-        int srcPort = ((data[headerLength] & 0xFF) << 8) | (data[headerLength + 1] & 0xFF);
-
-        String destIp = (data[16] & 0xFF) + "." + (data[17] & 0xFF) + "." +
-                (data[18] & 0xFF) + "." + (data[19] & 0xFF);
-        int destPort = ((data[headerLength + 2] & 0xFF) << 8) | (data[headerLength + 3] & 0xFF);
-
+        int srcPort = ((data[ip.headerLength] & 0xFF) << 8) | (data[ip.headerLength + 1] & 0xFF);
+        int destPort = ((data[ip.headerLength + 2] & 0xFF) << 8) | (data[ip.headerLength + 3] & 0xFF);
         if (srcPort == 0 || destPort == 0) return;
 
-        final boolean inbound = destIp.startsWith(TUN_PREFIX);
-
+        final boolean inbound = ip.isTunLocal();
         final String remoteIp;
         final int remotePort;
         final int localPort;
         final String localIp;
 
         if (inbound) {
-            remoteIp = srcIp;
+            remoteIp = ip.srcIpStr;
             remotePort = srcPort;
             localPort = destPort;
-            localIp = destIp;
+            localIp = ip.dstIpStr;
         } else {
-            remoteIp = destIp;
+            remoteIp = ip.dstIpStr;
             remotePort = destPort;
             localPort = srcPort;
-            localIp = srcIp;
+            localIp = ip.srcIpStr;
         }
+
+        if (ip.version == 4 && remoteIp.startsWith("10.0.0.")) return;
+        if (ip.version == 6 && remoteIp.startsWith("fd00:1:fd00:1:")) return;
 
         if (remoteIp.startsWith(TUN_PREFIX)) return;
 
