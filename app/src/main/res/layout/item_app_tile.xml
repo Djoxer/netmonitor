@@ -5,7 +5,7 @@
     android:orientation="horizontal"
     android:padding="10dp"
     android:layout_marginBottom="6dp"
-    android:background="#1E1E1E"
+    android:background="@color/md_theme_surface"
     android:gravity="center_vertical">
 
     <ImageView
@@ -25,7 +25,7 @@
             android:id="@+id/appName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/md_theme_on_surface"
             android:textSize="13sp"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -34,7 +34,7 @@
             android:id="@+id/appStats"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#9E9E9E"
+            android:textColor="@color/md_theme_on_surface_variant"
             android:textSize="11sp"
             android:maxLines="2" />
     </LinearLayout>
@@ -45,6 +45,6 @@
         android:layout_height="wrap_content"
         android:text="BLOCK"
         android:textSize="10sp"
-        android:textColor="#FF5722"
+        android:textColor="@color/status_block"
         android:visibility="gone" />
 </LinearLayout>

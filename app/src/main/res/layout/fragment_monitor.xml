@@ -4,14 +4,14 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="8dp"
-    android:background="#121212">
+    android:background="@color/md_theme_background">
 
     <TextView
         android:id="@+id/networkInfoText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Network: –"
-        android:textColor="#B0B0B0"
+        android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="12sp"
         android:paddingBottom="2dp" />
 
@@ -20,7 +20,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="IPs: –"
-        android:textColor="#9E9E9E"
+        android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="12sp"
         android:paddingBottom="2dp" />
 
@@ -29,7 +29,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="↑ 0 B/s   ↓ 0 B/s"
-        android:textColor="#9E9E9E"
+        android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="12sp"
         android:paddingBottom="4dp" />
 
@@ -38,7 +38,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="IPv4 / IPv6: –"
-        android:textColor="#9E9E9E"
+        android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="12sp"
         android:paddingBottom="8dp" />
 
@@ -52,7 +52,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="IPv4"
-            android:textColor="#90CAF9"
+            android:textColor="@color/md_theme_secondary"
             android:textSize="11sp" />
 
         <ProgressBar
@@ -62,13 +62,13 @@
             android:layout_height="8dp"
             android:max="100"
             android:progress="0"
-            android:progressTint="#2196F3" />
+            android:progressTint="@color/bar_ipv4" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="IPv6"
-            android:textColor="#A5D6A7"
+            android:textColor="@color/md_theme_primary"
             android:textSize="11sp"
             android:paddingTop="4dp" />
 
@@ -79,7 +79,7 @@
             android:layout_height="8dp"
             android:max="100"
             android:progress="0"
-            android:progressTint="#4CAF50" />
+            android:progressTint="@color/bar_ipv6" />
     </LinearLayout>
 
     <LinearLayout
@@ -93,6 +93,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginEnd="6dp"
             android:text="Start" />
 
         <Button
@@ -100,6 +101,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
             android:text="Stop" />
 
         <Button
@@ -107,6 +110,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginStart="6dp"
             android:text="Clear" />
     </LinearLayout>
 
@@ -123,7 +127,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Global block mode"
-            android:textColor="#B0B0B0" />
+            android:textColor="@color/md_theme_on_surface_variant" />
 
         <Switch
             android:id="@+id/switchBlockMode"
@@ -138,9 +142,9 @@
         android:hint="Filter apps…"
         android:inputType="text"
         android:maxLines="1"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/md_theme_on_surface"
         android:textColorHint="#777777"
-        android:background="#1E1E1E"
+        android:background="@color/md_theme_surface"
         android:padding="10dp"
         android:layout_marginBottom="6dp" />
 
@@ -162,7 +166,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="↑ Outgoing"
-                android:textColor="#4CAF50"
+                android:textColor="@color/bar_ipv6"
                 android:textStyle="bold"
                 android:gravity="center_horizontal"
                 android:textAlignment="center"
@@ -186,7 +190,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="↓ Incoming"
-                android:textColor="#2196F3"
+                android:textColor="@color/bar_ipv4"
                 android:textStyle="bold"
                 android:gravity="center_horizontal"
                 android:textAlignment="center"

@@ -4,7 +4,7 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="16dp"
-    android:background="#1A1A1A">
+    android:background="@color/md_theme_surface">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -30,7 +30,7 @@
                 android:id="@+id/detailAppName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/md_theme_on_surface_variant"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -38,7 +38,7 @@
                 android:id="@+id/detailPackage"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#9E9E9E"
+                android:textColor="@color/md_theme_on_surface_variant"
                 android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
@@ -55,7 +55,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Permanently block"
-            android:textColor="#E0E0E0"
+            android:textColor="@color/md_theme_on_surface"
             android:textSize="14sp" />
 
         <Switch
@@ -68,7 +68,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Block schedules (active = blocked)"
-        android:textColor="#4CAF50"
+        android:textColor="@color/status_running"
         android:textStyle="bold"
         android:paddingTop="8dp"
         android:paddingBottom="4dp" />
@@ -77,7 +77,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="During these times the app is blocked. Outside: allowed (unless permanent block)."
-        android:textColor="#9E9E9E"
+        android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="11sp"
         android:paddingBottom="8dp" />
 
@@ -85,7 +85,7 @@
         android:id="@+id/recyclerSchedules"
         android:layout_width="match_parent"
         android:layout_height="120dp"
-        android:background="#121212" />
+        android:background="@color/md_theme_background" />
 
     <Button
         android:id="@+id/btnAddSchedule"
@@ -98,7 +98,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Connections"
-        android:textColor="#2196F3"
+        android:textColor="@color/bar_ipv4"
         android:textStyle="bold"
         android:paddingTop="12dp"
         android:paddingBottom="4dp" />
@@ -106,7 +106,7 @@
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="180dp"
-        android:background="#121212"
+        android:background="@color/md_theme_background"
         android:fillViewport="true">
 
         <TextView
@@ -114,7 +114,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="8dp"
-            android:textColor="#B0B0B0"
+            android:textColor="@color/md_theme_on_surface_variant"
             android:textSize="12sp"
             android:textIsSelectable="true" />
     </ScrollView>

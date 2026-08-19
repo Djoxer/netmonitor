@@ -6,6 +6,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -17,6 +19,7 @@ import androidx.fragment.app.Fragment;
 import dev.djoxer.netmonitor.R;
 import dev.djoxer.netmonitor.data.LogExporter;
 import dev.djoxer.netmonitor.data.RuleRepository;
+import dev.djoxer.netmonitor.util.ThemePrefs;
 
 public class SettingsFragment extends Fragment {
 
@@ -47,6 +50,27 @@ public class SettingsFragment extends Fragment {
         Button btnClearBlocks = view.findViewById(R.id.btnClearPermanentBlocks);
         Button btnClearSchedules = view.findViewById(R.id.btnClearSchedules);
         Button btnReload = view.findViewById(R.id.btnReloadRules);
+
+        RadioGroup themeGroup = view.findViewById(R.id.themeGroup);
+        RadioButton themeSystem = view.findViewById(R.id.themeSystem);
+        RadioButton themeLight = view.findViewById(R.id.themeLight);
+        RadioButton themeDark = view.findViewById(R.id.themeDark);
+
+        int mode = ThemePrefs.getMode(requireContext());
+        if (mode == ThemePrefs.MODE_LIGHT) themeLight.setChecked(true);
+        else if (mode == ThemePrefs.MODE_SYSTEM) themeSystem.setChecked(true);
+        else themeDark.setChecked(true);
+
+        themeGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            int newMode = ThemePrefs.MODE_DARK;
+            if (checkedId == R.id.themeLight) newMode = ThemePrefs.MODE_LIGHT;
+            else if (checkedId == R.id.themeSystem) newMode = ThemePrefs.MODE_SYSTEM;
+            
+            if (newMode != ThemePrefs.getMode(requireContext())) {
+                ThemePrefs.setMode(requireContext(), newMode);
+                requireActivity().recreate();
+            }
+        });
 
         btnClearLog.setOnClickListener(v -> confirm(
                 "Clear event log?",
@@ -108,12 +132,34 @@ public class SettingsFragment extends Fragment {
     }
 
     private void confirm(String title, String message, Runnable action) {
-        new AlertDialog.Builder(requireContext())
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
                 .setTitle(title)
                 .setMessage(message)
                 .setPositiveButton("OK", (d, w) -> action.run())
                 .setNegativeButton("Cancel", null)
-                .show();
+                .create();
+
+        dialog.setOnShowListener(d -> {
+            final int gapPx = (int) (12 * getResources().getDisplayMetrics().density);
+
+            Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Button negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+
+            if (positive != null) {
+                ViewGroup.MarginLayoutParams lp =
+                        (ViewGroup.MarginLayoutParams) positive.getLayoutParams();
+                lp.setMarginStart(gapPx);
+                positive.setLayoutParams(lp);
+            }
+            if (negative != null) {
+                ViewGroup.MarginLayoutParams lp =
+                        (ViewGroup.MarginLayoutParams) negative.getLayoutParams();
+                lp.setMarginEnd(gapPx);
+                negative.setLayoutParams(lp);
+            }
+        });
+
+        dialog.show();
     }
 
     private void uiDone(String msg) {

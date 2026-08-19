@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121212"
+    android:background="@color/md_theme_background"
     android:padding="16dp"
     android:fillViewport="true">
 
@@ -10,7 +10,7 @@
         android:id="@+id/aboutText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#B0B0B0"
+        android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="14sp"
         android:lineSpacingExtra="2dp"
         android:textIsSelectable="true" />

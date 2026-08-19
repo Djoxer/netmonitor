@@ -56,6 +56,13 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.6.0
+            • Material 3 DayNight theme (light / dark / system)
+            • Theme switch in Settings
+            • Button style and spacing polish
+            • Dialog button spacing for confirms and schedules
+            • Settings tab stability fix
+            
             v1.5.0
             • IPv4/IPv6 share as progress bars on monitor
             • App icons in log list

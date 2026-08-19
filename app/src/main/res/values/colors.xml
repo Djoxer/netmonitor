@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <color name="md_theme_primary">#2E7D32</color>
+    <color name="md_theme_on_primary">#FFFFFF</color>
+    <color name="md_theme_secondary">#1565C0</color>
+    <color name="md_theme_background">#F5F5F5</color>
+    <color name="md_theme_surface">#FFFFFF</color>
+    <color name="md_theme_on_surface">#1A1A1A</color>
+    <color name="md_theme_on_surface_variant">#5C5C5C</color>
+    <color name="md_theme_outline">#BDBDBD</color>
+    <color name="status_running">#2E7D32</color>
+    <color name="status_block">#E65100</color>
+    <color name="status_stopped">#C62828</color>
+    <color name="bar_ipv4">#1565C0</color>
+    <color name="bar_ipv6">#2E7D32</color>
 </resources>

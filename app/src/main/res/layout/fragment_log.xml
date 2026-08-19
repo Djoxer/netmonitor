@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="8dp"
-    android:background="#121212">
+    android:background="@color/md_theme_background">
 
     <EditText
         android:id="@+id/logSearch"
@@ -13,9 +13,9 @@
         android:hint="Filter log…"
         android:inputType="text"
         android:maxLines="1"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/md_theme_on_surface"
         android:textColorHint="#777777"
-        android:background="#1E1E1E"
+        android:background="@color/md_theme_surface"
         android:padding="10dp" />
 
     <Button

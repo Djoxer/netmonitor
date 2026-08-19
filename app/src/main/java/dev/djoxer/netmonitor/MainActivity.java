@@ -2,22 +2,24 @@ package dev.djoxer.netmonitor;
 
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.view.animation.LinearInterpolator;
 import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.annotation.Nullable;
-import androidx.core.graphics.drawable.DrawableCompat;
-import androidx.fragment.app.FragmentActivity;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
+import dev.djoxer.netmonitor.R;
 import dev.djoxer.netmonitor.ui.MainPagerAdapter;
+import dev.djoxer.netmonitor.util.ThemePrefs;
 
-public class MainActivity extends FragmentActivity {
+public class MainActivity extends AppCompatActivity {
 
     private static final String[] TAB_TITLES = {"Monitor", "Log", "Settings", "About"};
 
@@ -30,37 +32,39 @@ public class MainActivity extends FragmentActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        ThemePrefs.applyStored(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        TextView title = findViewById(R.id.titleText);
+        if (title != null) {
+            title.setTextColor(ContextCompat.getColor(this, R.color.md_theme_on_surface));
+        }
 
         headerStatusIcon = findViewById(R.id.headerStatusIcon);
         setVpnStatus(STATUS_STOPPED);
 
         ViewPager2 pager = findViewById(R.id.viewPager);
         TabLayout tabs = findViewById(R.id.tabLayout);
-
         pager.setAdapter(new MainPagerAdapter(this));
         new TabLayoutMediator(tabs, pager, (tab, position) ->
                 tab.setText(TAB_TITLES[position])).attach();
     }
 
-    /**
-     * Called from MonitorFragment when VPN starts/stops.
-     */
     public void setVpnStatus(int status) {
         if (headerStatusIcon == null) return;
-
         stopBlink();
 
         if (status == STATUS_FORWARD || status == STATUS_BLOCK) {
             headerStatusIcon.setImageResource(android.R.drawable.ic_media_play);
-            int color = (status == STATUS_BLOCK) ? Color.parseColor("#FF5722") : Color.parseColor("#4CAF50");
+            int color = ContextCompat.getColor(this,
+                    status == STATUS_BLOCK ? R.color.status_block : R.color.status_running);
             headerStatusIcon.setColorFilter(color);
             headerStatusIcon.setAlpha(1f);
             startBlink();
         } else {
             headerStatusIcon.setImageResource(android.R.drawable.ic_media_pause);
-            headerStatusIcon.setColorFilter(Color.parseColor("#F44336"));
+            headerStatusIcon.setColorFilter(ContextCompat.getColor(this, R.color.status_stopped));
             headerStatusIcon.setAlpha(1f);
         }
     }
@@ -79,9 +83,7 @@ public class MainActivity extends FragmentActivity {
             blinkAnimator.cancel();
             blinkAnimator = null;
         }
-        if (headerStatusIcon != null) {
-            headerStatusIcon.setAlpha(1f);
-        }
+        if (headerStatusIcon != null) headerStatusIcon.setAlpha(1f);
     }
 
     @Override

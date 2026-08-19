@@ -18,7 +18,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textColor="#B0B0B0"
+        android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="12sp"
         android:textIsSelectable="true" />
 </LinearLayout>

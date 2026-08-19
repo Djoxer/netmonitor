@@ -5,6 +5,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -234,7 +235,7 @@ public class AppDetailDialog extends DialogFragment {
             day.setOnCheckedChangeListener((b, checked) -> syncAllCheckbox(dayAll, days));
         }
 
-        new AlertDialog.Builder(requireContext())
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
                 .setTitle("Add block schedule")
                 .setView(form)
                 .setPositiveButton("Save", (d, w) -> {
@@ -256,7 +257,30 @@ public class AppDetailDialog extends DialogFragment {
                             requireActivity().runOnUiThread(this::reloadSchedules));
                 })
                 .setNegativeButton("Cancel", null)
-                .show();
+                .create();
+
+        dialog.setOnShowListener(d -> spaceDialogButtons(dialog));
+        dialog.show();
+    }
+
+    private void spaceDialogButtons(AlertDialog dialog) {
+        final int gapPx = (int) (12 * requireContext().getResources().getDisplayMetrics().density);
+
+        Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        Button negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+
+        if (positive != null && positive.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams lp =
+                    (ViewGroup.MarginLayoutParams) positive.getLayoutParams();
+            lp.setMarginStart(gapPx);
+            positive.setLayoutParams(lp);
+        }
+        if (negative != null && negative.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams lp =
+                    (ViewGroup.MarginLayoutParams) negative.getLayoutParams();
+            lp.setMarginEnd(gapPx);
+            negative.setLayoutParams(lp);
+        }
     }
 
     private void syncAllCheckbox(CheckBox dayAll, CheckBox[] days) {

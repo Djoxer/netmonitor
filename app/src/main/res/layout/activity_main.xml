@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#121212">
+    android:background="@color/md_theme_background">
 
     <!-- Header: title left, status icon right -->
     <LinearLayout
@@ -23,7 +23,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="NetMonitor"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/md_theme_on_surface"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -34,17 +34,17 @@
             android:layout_gravity="end|center_vertical"
             android:contentDescription="@string/app_name"
             android:src="@android:drawable/ic_media_pause"
-            app:tint="#F44336" />
+            app:tint="@color/status_stopped" />
     </LinearLayout>
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#1E1E1E"
-        app:tabTextColor="#AAAAAA"
-        app:tabSelectedTextColor="#FFFFFF"
-        app:tabIndicatorColor="#4CAF50" />
+        android:background="@color/md_theme_surface"
+        app:tabTextColor="@color/md_theme_on_surface_variant"
+        app:tabSelectedTextColor="@color/md_theme_primary"
+        app:tabIndicatorColor="@color/md_theme_primary" />
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPager"
