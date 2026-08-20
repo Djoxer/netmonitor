@@ -56,6 +56,10 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.9.0
+            • 24h traffic chart from periodic samples
+            • Room retention 24h; out/in rate lines on monitor
+            
             v1.8.0
             • Icon toolbar (start/stop/clear/block) instead of text buttons
             • Console: ASCII borders, one IPv6, blinking prompt, fixed height

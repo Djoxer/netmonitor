@@ -92,7 +92,12 @@
         android:background="@color/md_theme_surface"
         android:visibility="gone">
 
-        <!-- Chart view will be added here in the next step -->
+        <dev.djoxer.netmonitor.ui.TrafficChartView
+            android:id="@+id/trafficChart"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="4dp" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="match_parent"

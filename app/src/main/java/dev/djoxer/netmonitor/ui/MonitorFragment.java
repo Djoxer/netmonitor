@@ -33,6 +33,7 @@ import java.util.Map;
 import dev.djoxer.netmonitor.MainActivity;
 import dev.djoxer.netmonitor.R;
 import dev.djoxer.netmonitor.block.BlockManager;
+import dev.djoxer.netmonitor.data.TrafficSampler;
 import dev.djoxer.netmonitor.network.NetworkStatusHelper;
 import dev.djoxer.netmonitor.vpn.ConnectionInfo;
 import dev.djoxer.netmonitor.vpn.ConnectionTracker;
@@ -53,6 +54,8 @@ public class MonitorFragment extends Fragment {
     private View barPartV4;
     private View barPartV6;
     private View chartContainer;
+    private TrafficChartView trafficChart;
+    private long lastChartLoadMs = 0;
 
     private TextView terminalText;
     private boolean promptCursorOn = false;
@@ -98,6 +101,8 @@ public class MonitorFragment extends Fragment {
         barPartV6 = view.findViewById(R.id.barPartV6);
         chartContainer = view.findViewById(R.id.chartContainer);
         terminalText = view.findViewById(R.id.terminalText);
+        trafficChart = view.findViewById(R.id.trafficChart);
+        if (chartContainer != null) chartContainer.setVisibility(View.VISIBLE);
 
         EditText appSearch = view.findViewById(R.id.appSearch);
         RecyclerView recyclerOut = view.findViewById(R.id.recyclerOut);
@@ -188,6 +193,16 @@ public class MonitorFragment extends Fragment {
         updateSpeedSample();
         updateIpStats();
         updateConsoleStatus();
+        TrafficSampler.getInstance().maybeSample(requireContext());
+
+        long now = System.currentTimeMillis();
+        if (trafficChart != null && now - lastChartLoadMs > 15_000L) {
+            lastChartLoadMs = now;
+            TrafficSampler.getInstance().loadLast24h(requireContext(), samples -> {
+                if (getActivity() == null || trafficChart == null) return;
+                getActivity().runOnUiThread(() -> trafficChart.setSamples(samples));
+            });
+        }
 
         List<ConnectionInfo> all = NetVpnService.getConnections();
         Map<String, AppGroup> outMap = new HashMap<>();
