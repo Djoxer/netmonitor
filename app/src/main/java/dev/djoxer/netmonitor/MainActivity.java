@@ -38,6 +38,16 @@ public class MainActivity extends AppCompatActivity {
     private ImageView headerStatusIcon;
     private ObjectAnimator blinkAnimator;
 
+    private TextView sessionTimerText;
+    private final android.os.Handler timerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable timerTick = new Runnable() {
+        @Override
+        public void run() {
+            updateSessionTimer();
+            timerHandler.postDelayed(this, 1000L);
+        }
+    };
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         ThemePrefs.applyStored(this);
@@ -51,6 +61,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         headerStatusIcon = findViewById(R.id.headerStatusIcon);
+        sessionTimerText = findViewById(R.id.sessionTimerText);
+
         setVpnStatus(STATUS_STOPPED);
 
         ViewPager2 pager = findViewById(R.id.viewPager);
@@ -124,12 +136,6 @@ public class MainActivity extends AppCompatActivity {
         if (headerStatusIcon != null) headerStatusIcon.setAlpha(1f);
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        syncVpnStatusFromService();
-    }
-
     public void syncVpnStatusFromService() {
         if (!NetVpnService.isServiceRunning()) {
             setVpnStatus(STATUS_STOPPED);
@@ -138,6 +144,36 @@ public class MainActivity extends AppCompatActivity {
         } else {
             setVpnStatus(STATUS_FORWARD);
         }
+    }
+
+    private void updateSessionTimer() {
+        if (sessionTimerText == null) return;
+        long elapsed = NetVpnService.getSessionElapsedMs();
+        if (elapsed <= 0L || !NetVpnService.isServiceRunning()) {
+            sessionTimerText.setVisibility(View.GONE);
+            sessionTimerText.setText("00:00:00");
+            return;
+        }
+        sessionTimerText.setVisibility(View.VISIBLE);
+        long sec = elapsed / 1000L;
+        long h = sec / 3600L;
+        long m = (sec % 3600L) / 60L;
+        long s = sec % 60L;
+        sessionTimerText.setText(String.format(java.util.Locale.US, "%02d:%02d:%02d", h, m, s));
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        syncVpnStatusFromService();
+        timerHandler.removeCallbacks(timerTick);
+        timerHandler.post(timerTick);
+    }
+
+    @Override
+    protected void onPause() {
+        timerHandler.removeCallbacks(timerTick);
+        super.onPause();
     }
 
     @Override

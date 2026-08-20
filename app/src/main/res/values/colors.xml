@@ -13,4 +13,6 @@
     <color name="status_stopped">#C62828</color>
     <color name="bar_ipv4">#1565C0</color>
     <color name="bar_ipv6">#2E7D32</color>
+    <color name="console_text">#DEE9FA</color>
+    <color name="console_background">#012456</color>
 </resources>

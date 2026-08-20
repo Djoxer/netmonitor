@@ -38,6 +38,7 @@ public class NetVpnService extends VpnService {
     private static final int NOTIFICATION_ID = 1;
     private static final AtomicBoolean SERVICE_RUNNING = new AtomicBoolean(false);
     private static volatile boolean blockMode = false;
+    private static volatile long sessionStartedAtMs = 0L;
     private static ConnectionTracker tracker = new ConnectionTracker();
 
     private ParcelFileDescriptor vpnInterface;
@@ -48,8 +49,18 @@ public class NetVpnService extends VpnService {
     private TcpForwarder tcpForwarder;
 
     private static volatile NetVpnService instance;
+
     public static boolean isServiceRunning() {
         return instance != null && instance.running.get();
+    }
+    public static long getSessionStartedAtMs() {
+        return sessionStartedAtMs;
+    }
+
+    public static long getSessionElapsedMs() {
+        long start = sessionStartedAtMs;
+        if (start <= 0L || instance == null || !instance.running.get()) return 0L;
+        return Math.max(0L, System.currentTimeMillis() - start);
     }
     public static void setBlockModeLive(boolean enabled) {
         blockMode = enabled;
@@ -153,6 +164,8 @@ public class NetVpnService extends VpnService {
             udpForwarder.start();
             tcpForwarder.start();
 
+            sessionStartedAtMs = System.currentTimeMillis();
+
             String mode = blockMode ? "Block mode active" : "Forward mode (UDP+TCP)";
             if (!ipv6Added) {
                 mode = mode + " · IPv4 only";
@@ -243,6 +256,8 @@ public class NetVpnService extends VpnService {
 
     private void stopVpn() {
         running.set(false);
+        sessionStartedAtMs = 0L;
+
         if (udpForwarder != null) udpForwarder.shutdown();
         if (tcpForwarder != null) tcpForwarder.shutdown();
         if (captureThread != null) {

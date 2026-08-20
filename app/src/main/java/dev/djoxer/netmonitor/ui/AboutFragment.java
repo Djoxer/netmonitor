@@ -56,6 +56,11 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.10.0
+            • Session runtime stopwatch in header while VPN is active
+            • 24h chart polish (reset-safe deltas, fill, peak label)
+            • Console text/background colors for light mode
+            
             v1.9.0
             • 24h traffic chart from periodic samples
             • Room retention 24h; out/in rate lines on monitor
