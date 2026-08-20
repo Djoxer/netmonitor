@@ -56,6 +56,9 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.10.1
+            • 24h samples recorded in VPN service (works in background)
+            
             v1.10.0
             • Session runtime stopwatch in header while VPN is active
             • 24h chart polish (reset-safe deltas, fill, peak label)

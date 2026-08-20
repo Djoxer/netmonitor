@@ -193,7 +193,6 @@ public class MonitorFragment extends Fragment {
         updateSpeedSample();
         updateIpStats();
         updateConsoleStatus();
-        TrafficSampler.getInstance().maybeSample(requireContext());
 
         long now = System.currentTimeMillis();
         if (trafficChart != null && now - lastChartLoadMs > 15_000L) {

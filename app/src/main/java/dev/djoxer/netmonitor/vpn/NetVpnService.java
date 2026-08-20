@@ -44,9 +44,9 @@ public class NetVpnService extends VpnService {
     private ParcelFileDescriptor vpnInterface;
     private Thread captureThread;
     private final AtomicBoolean running = new AtomicBoolean(false);
-
     private UdpForwarder udpForwarder;
     private TcpForwarder tcpForwarder;
+    private android.os.Handler sampleHandler;
 
     private static volatile NetVpnService instance;
 
@@ -97,6 +97,22 @@ public class NetVpnService extends VpnService {
         String mode = enabled ? "Block mode active" : "Forward mode (UDP+TCP)";
         updateNotification(mode);
     }
+
+    private final Runnable sampleRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!running.get()) return;
+            try {
+                dev.djoxer.netmonitor.data.TrafficSampler.getInstance()
+                        .maybeSample(NetVpnService.this);
+            } catch (Exception ignored) {
+            }
+            if (running.get() && sampleHandler != null) {
+                sampleHandler.postDelayed(this,
+                        dev.djoxer.netmonitor.data.TrafficSampler.SAMPLE_INTERVAL_MS);
+            }
+        }
+    };
 
     @Override
     public void onCreate() {
@@ -165,6 +181,13 @@ public class NetVpnService extends VpnService {
             tcpForwarder.start();
 
             sessionStartedAtMs = System.currentTimeMillis();
+
+            if (sampleHandler == null) {
+                sampleHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            }
+            sampleHandler.removeCallbacks(sampleRunnable);
+            // first sample soon, then every SAMPLE_INTERVAL_MS
+            sampleHandler.post(sampleRunnable);
 
             String mode = blockMode ? "Block mode active" : "Forward mode (UDP+TCP)";
             if (!ipv6Added) {
@@ -257,6 +280,9 @@ public class NetVpnService extends VpnService {
     private void stopVpn() {
         running.set(false);
         sessionStartedAtMs = 0L;
+        if (sampleHandler != null) {
+            sampleHandler.removeCallbacks(sampleRunnable);
+        }
 
         if (udpForwarder != null) udpForwarder.shutdown();
         if (tcpForwarder != null) tcpForwarder.shutdown();
