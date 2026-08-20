@@ -120,7 +120,7 @@ public class NetworkStatusHelper {
         } catch (Exception e) {
             Log.w(TAG, "wifi label", e);
         }
-        return "Wi‑Fi";
+        return "Wi-Fi";
     }
 
     private String cellularLabel() {

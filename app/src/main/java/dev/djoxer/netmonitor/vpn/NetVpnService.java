@@ -47,29 +47,50 @@ public class NetVpnService extends VpnService {
     private UdpForwarder udpForwarder;
     private TcpForwarder tcpForwarder;
 
+    private static volatile NetVpnService instance;
     public static boolean isServiceRunning() {
-        return SERVICE_RUNNING.get();
+        return instance != null && instance.running.get();
     }
-
+    public static void setBlockModeLive(boolean enabled) {
+        blockMode = enabled;
+        NetVpnService svc = instance;
+        if (svc != null) {
+            String mode = enabled ? "Block mode active" : "Forward mode (UDP+TCP)";
+            svc.updateNotification(mode);
+        }
+    }
     public static List<ConnectionInfo> getConnections() {
         return tracker.getConnections();
     }
-
     public static void clearConnections() {
         tracker.clear();
     }
-
+    public static ConnectionTracker getTracker() {
+        return tracker;
+    }
     public static boolean isBlockMode() {
         return blockMode;
     }
 
-    public static ConnectionTracker getTracker() {
-        return tracker;
+    /**
+     * Toggle global block while the capture loop is running.
+     * Safe to call from UI thread; capture loop reads the flag per packet.
+     */
+    public static void setBlockMode(boolean enabled) {
+        blockMode = enabled;
+    }
+
+    /** Instance helper: update notification text after live toggle. */
+    public void applyBlockModeLive(boolean enabled) {
+        blockMode = enabled;
+        String mode = enabled ? "Block mode active" : "Forward mode (UDP+TCP)";
+        updateNotification(mode);
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
+        instance = this;
         tracker.init(getSystemService(ConnectivityManager.class), getPackageManager());
         udpForwarder = new UdpForwarder(this, tracker, running);
         tcpForwarder = new TcpForwarder(this, tracker, running);
@@ -243,6 +264,7 @@ public class NetVpnService extends VpnService {
 
     @Override
     public void onDestroy() {
+        if (instance == this) instance = null;
         stopVpn();
         LogWriter.getInstance().stop();
         super.onDestroy();

@@ -56,6 +56,12 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.8.0
+            • Icon toolbar (start/stop/clear/block) instead of text buttons
+            • Console: ASCII borders, one IPv6, blinking prompt, fixed height
+            • Global block toggles live while VPN is running
+            • Placeholder for 24h traffic chart
+            
             v1.7.1
             • Edge-to-edge layout with system bar insets (Android 15+)
             • Console line width reduced to avoid wrap artifacts
