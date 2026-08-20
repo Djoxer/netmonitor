@@ -4,6 +4,7 @@ import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.view.View;
 import android.view.Window;
 import android.view.animation.LinearInterpolator;
 import android.widget.ImageView;
@@ -12,7 +13,9 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.viewpager2.widget.ViewPager2;
 
@@ -40,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
         ThemePrefs.applyStored(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        applySystemBars();
+        setupEdgeToEdge();
 
         TextView title = findViewById(R.id.titleText);
         if (title != null) {
@@ -57,19 +60,32 @@ public class MainActivity extends AppCompatActivity {
                 tab.setText(TAB_TITLES[position])).attach();
     }
 
-    private void applySystemBars() {
+    private void setupEdgeToEdge() {
         Window window = getWindow();
-        window.setStatusBarColor(ContextCompat.getColor(this, R.color.md_theme_surface));
-        window.setNavigationBarColor(ContextCompat.getColor(this, R.color.md_theme_background));
+        WindowCompat.setDecorFitsSystemWindows(window, false);
+
+        // System Bar Farben (für ältere Android Versionen oder Fallback)
+        window.setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        window.setNavigationBarColor(android.graphics.Color.TRANSPARENT);
 
         boolean lightTheme = (getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES;
 
-        WindowInsetsControllerCompat insets =
+        WindowInsetsControllerCompat insetsController =
                 WindowCompat.getInsetsController(window, window.getDecorView());
-        if (insets != null) {
-            insets.setAppearanceLightStatusBars(lightTheme);      // dunkle Icons bei hellem BG
-            insets.setAppearanceLightNavigationBars(lightTheme);
+        if (insetsController != null) {
+            insetsController.setAppearanceLightStatusBars(lightTheme);
+            insetsController.setAppearanceLightNavigationBars(lightTheme);
+        }
+
+        // Padding auf das Root-Layout anwenden, damit Content nicht unter System-Bars rutscht
+        View root = findViewById(R.id.mainRoot);
+        if (root != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+                androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                return WindowInsetsCompat.CONSUMED;
+            });
         }
     }
 

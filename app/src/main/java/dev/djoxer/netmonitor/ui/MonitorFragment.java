@@ -221,30 +221,30 @@ public class MonitorFragment extends Fragment {
 
         NetworkStatusHelper.Snapshot snap = networkStatusHelper.snapshot();
         StringBuilder sb = new StringBuilder();
-        sb.append("+-- netmonitor console ---------------------------+\n");
+        sb.append("+-- netmonitor console -----------------------+\n");
         String netLine = ascii(snap.networkType + " / " + snap.provider);
-        sb.append("| net : ").append(pad(netLine, 42)).append("|\n");
+        sb.append("| net : ").append(pad(netLine, 38)).append("|\n");
 
         if (snap.ipv4.isEmpty()) {
-            sb.append("| IPv4: ").append(pad("–", 42)).append("|\n");
+            sb.append("| IPv4: ").append(pad("–", 38)).append("|\n");
         } else {
             for (int i = 0; i < snap.ipv4.size(); i++) {
                 String label = (i == 0) ? "IPv4: " : "      ";
-                sb.append("| ").append(label).append(pad(snap.ipv4.get(i), 42)).append("|\n");
+                sb.append("| ").append(label).append(pad(snap.ipv4.get(i), 38)).append("|\n");
             }
         }
 
         if (snap.ipv6.isEmpty()) {
-            sb.append("| IPv6: ").append(pad("–", 42)).append("|\n");
+            sb.append("| IPv6: ").append(pad("–", 38)).append("|\n");
         } else {
             for (int i = 0; i < snap.ipv6.size(); i++) {
                 String label = (i == 0) ? "IPv6: " : "      ";
-                sb.append("| ").append(label).append(pad(snap.ipv6.get(i), 42)).append("|\n");
+                sb.append("| ").append(label).append(pad(snap.ipv6.get(i), 38)).append("|\n");
             }
         }
 
-        sb.append("| rate: ").append(pad(lastRateLine, 42)).append("|\n");
-        sb.append("+-------------------------------------------------+\n");
+        sb.append("| rate: ").append(pad(lastRateLine, 38)).append("|\n");
+        sb.append("+---------------------------------------------+\n");
         sb.append(promptVisible ? "netmonitor@device:~$ _" : "netmonitor@device:~$  ");
 
         terminalText.setText(sb.toString());

@@ -82,7 +82,8 @@
                 android:textColor="#00FF00"
                 android:textSize="11sp"
                 android:typeface="monospace"
-                android:lineSpacingExtra="1dp"
+                android:includeFontPadding="false"
+                android:lineSpacingExtra="0dp"
                 android:textIsSelectable="true"
                 android:text="+-- netmonitor console -----------------------------+\n| boot sequence complete                            |\n+--------------------------------------------------+\nnetmonitor@device:~$ " />
     </ScrollView>

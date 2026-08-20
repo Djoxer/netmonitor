@@ -56,6 +56,12 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.7.1
+            • Edge-to-edge layout with system bar insets (Android 15+)
+            • Console line width reduced to avoid wrap artifacts
+            • Button height/padding unified across Android versions
+            • Header VPN status synced from service on resume
+            
             v1.7.0
             • Terminal-style console on monitor (net, IPs, rate, prompt)
             • Fused IPv4/IPv6 share bar with byte labels
