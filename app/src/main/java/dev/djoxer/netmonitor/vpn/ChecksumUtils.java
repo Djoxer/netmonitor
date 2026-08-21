@@ -18,7 +18,6 @@ public final class ChecksumUtils {
         return ~sum & 0xFFFF;
     }
 
-    /** TCP/UDP checksum with IPv4 pseudo-header */
     public static int transportChecksumV4(byte[] srcIp, byte[] dstIp, int protocol,
                                           byte[] packet, int transportOffset, int transportLength) {
         int sum = 0;
@@ -31,7 +30,6 @@ public final class ChecksumUtils {
         return finishSum(sum, packet, transportOffset, transportLength);
     }
 
-    /** TCP/UDP checksum with IPv6 pseudo-header */
     public static int transportChecksumV6(byte[] srcIp, byte[] dstIp, int protocol,
                                           byte[] packet, int transportOffset, int transportLength) {
         int sum = 0;
@@ -47,7 +45,7 @@ public final class ChecksumUtils {
         return finishSum(sum, packet, transportOffset, transportLength);
     }
 
-    /** @deprecated use transportChecksumV4 */
+    @Deprecated
     public static int tcpChecksum(byte[] srcIp, byte[] dstIp,
                                   byte[] packet, int tcpOffset, int tcpLength) {
         return transportChecksumV4(srcIp, dstIp, 6, packet, tcpOffset, tcpLength);

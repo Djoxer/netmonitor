@@ -9,7 +9,7 @@ import dev.djoxer.netmonitor.vpn.ConnectionInfo;
 
 public class AppGroup {
 
-    public final String key; // packageName or "uid:x" or "unknown"
+    public final String key;
     public String displayName;
     public String packageName;
     public int uid = -1;
@@ -18,7 +18,11 @@ public class AppGroup {
     public long bytesOut;
     public long bytesIn;
     public int connCount;
+
     public boolean blocked;
+    public boolean blockedOut;
+    public boolean blockedIn;
+    public boolean bypass;
 
     public final List<ConnectionInfo> connections = new ArrayList<>();
 

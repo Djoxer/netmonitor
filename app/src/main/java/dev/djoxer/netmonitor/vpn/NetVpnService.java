@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.djoxer.netmonitor.MainActivity;
+import dev.djoxer.netmonitor.block.BlockManager;
 import dev.djoxer.netmonitor.data.LogWriter;
 import dev.djoxer.netmonitor.data.RuleRepository;
 
@@ -53,6 +54,7 @@ public class NetVpnService extends VpnService {
     public static boolean isServiceRunning() {
         return instance != null && instance.running.get();
     }
+
     public static long getSessionStartedAtMs() {
         return sessionStartedAtMs;
     }
@@ -62,6 +64,7 @@ public class NetVpnService extends VpnService {
         if (start <= 0L || instance == null || !instance.running.get()) return 0L;
         return Math.max(0L, System.currentTimeMillis() - start);
     }
+
     public static void setBlockModeLive(boolean enabled) {
         blockMode = enabled;
         NetVpnService svc = instance;
@@ -70,28 +73,27 @@ public class NetVpnService extends VpnService {
             svc.updateNotification(mode);
         }
     }
+
     public static List<ConnectionInfo> getConnections() {
         return tracker.getConnections();
     }
+
     public static void clearConnections() {
         tracker.clear();
     }
+
     public static ConnectionTracker getTracker() {
         return tracker;
     }
+
     public static boolean isBlockMode() {
         return blockMode;
     }
 
-    /**
-     * Toggle global block while the capture loop is running.
-     * Safe to call from UI thread; capture loop reads the flag per packet.
-     */
     public static void setBlockMode(boolean enabled) {
         blockMode = enabled;
     }
 
-    /** Instance helper: update notification text after live toggle. */
     public void applyBlockModeLive(boolean enabled) {
         blockMode = enabled;
         String mode = enabled ? "Block mode active" : "Forward mode (UDP+TCP)";
@@ -166,7 +168,19 @@ public class NetVpnService extends VpnService {
                 Log.i(TAG, "No device IPv6 connectivity – IPv4-only VPN");
             }
 
+            // Never route NetMonitor itself through the VPN
             builder.addDisallowedApplication(getPackageName());
+
+            // Per-app bypass: full system path, no capture / log / block
+            for (String pkg : BlockManager.getInstance().getBypassPackages()) {
+                try {
+                    builder.addDisallowedApplication(pkg);
+                    Log.i(TAG, "VPN bypass: " + pkg);
+                } catch (Exception e) {
+                    Log.w(TAG, "bypass failed for " + pkg, e);
+                }
+            }
+
             builder.setBlocking(true);
 
             vpnInterface = builder.establish();
@@ -186,7 +200,6 @@ public class NetVpnService extends VpnService {
                 sampleHandler = new android.os.Handler(android.os.Looper.getMainLooper());
             }
             sampleHandler.removeCallbacks(sampleRunnable);
-            // first sample soon, then every SAMPLE_INTERVAL_MS
             sampleHandler.post(sampleRunnable);
 
             String mode = blockMode ? "Block mode active" : "Forward mode (UDP+TCP)";
@@ -205,10 +218,6 @@ public class NetVpnService extends VpnService {
         }
     }
 
-    /**
-     * True if the device currently has a global (non-link-local) IPv6 address
-     * on an up network interface.
-     */
     private boolean deviceHasIpv6Connectivity() {
         try {
             Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();

@@ -13,12 +13,24 @@ public class BlockRuleEntity {
 
     public int uid;
     public String appName;
-    public boolean permanentlyBlocked;
 
-    public BlockRuleEntity(@NonNull String packageName, int uid, String appName, boolean permanentlyBlocked) {
+    public boolean blockOut;
+    public boolean blockIn;
+    public boolean bypass;
+
+    public BlockRuleEntity(@NonNull String packageName, int uid, String appName,
+                           boolean blockOut, boolean blockIn, boolean bypass) {
         this.packageName = packageName;
         this.uid = uid;
         this.appName = appName;
-        this.permanentlyBlocked = permanentlyBlocked;
+        this.blockOut = blockOut;
+        this.blockIn = blockIn;
+        this.bypass = bypass;
+    }
+
+    /** Convenience: both directions same flag, no bypass. */
+    public BlockRuleEntity(@NonNull String packageName, int uid, String appName,
+                           boolean blockedBoth) {
+        this(packageName, uid, appName, blockedBoth, blockedBoth, false);
     }
 }

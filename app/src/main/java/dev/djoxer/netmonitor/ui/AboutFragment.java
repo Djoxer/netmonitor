@@ -56,6 +56,14 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.11.0
+            • Directional block (out / in independent)
+            • Per-app VPN bypass (no monitor/log; needs restart)
+            • Compact Out/In/Bypass toggles in app dialog
+            • Tile badges for BLOCK and BYPASS
+            • Header status icon fix on first VPN start
+            • Console prompt shows device name
+            
             v1.10.1
             • 24h samples recorded in VPN service (works in background)
             

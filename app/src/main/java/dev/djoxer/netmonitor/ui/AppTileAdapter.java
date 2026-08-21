@@ -7,6 +7,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
@@ -51,9 +52,9 @@ public class AppTileAdapter extends RecyclerView.Adapter<AppTileAdapter.Holder> 
         h.name.setText(g.displayName);
 
         if (mode == Mode.OUT) {
-            h.stats.setText("↑ " + format(g.bytesOut));
+            h.stats.setText("^ " + format(g.bytesOut));
         } else {
-            h.stats.setText("↓ " + format(g.bytesIn));
+            h.stats.setText("v " + format(g.bytesIn));
         }
 
         if (g.icon != null) {
@@ -61,7 +62,24 @@ public class AppTileAdapter extends RecyclerView.Adapter<AppTileAdapter.Holder> 
         } else {
             h.icon.setImageResource(android.R.drawable.sym_def_app_icon);
         }
-        h.badge.setVisibility(g.blocked ? View.VISIBLE : View.GONE);
+
+        // Bypass wins over direction block; shown on BOTH columns
+        if (g.bypass) {
+            h.badge.setVisibility(View.VISIBLE);
+            h.badge.setText("BYPASS");
+            h.badge.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.bar_ipv4));
+        } else if (mode == Mode.OUT && g.blockedOut) {
+            h.badge.setVisibility(View.VISIBLE);
+            h.badge.setText("BLOCK");
+            h.badge.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.status_block));
+        } else if (mode == Mode.IN && g.blockedIn) {
+            h.badge.setVisibility(View.VISIBLE);
+            h.badge.setText("BLOCK");
+            h.badge.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.status_block));
+        } else {
+            h.badge.setVisibility(View.GONE);
+        }
+
         h.itemView.setOnClickListener(v -> {
             if (listener != null) listener.onAppClicked(g);
         });

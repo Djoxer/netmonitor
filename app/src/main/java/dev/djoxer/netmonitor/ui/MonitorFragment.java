@@ -7,6 +7,7 @@ import android.net.VpnService;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
@@ -44,6 +45,7 @@ public class MonitorFragment extends Fragment {
     private static final int REQUEST_VPN = 1001;
     private static final int CONSOLE_WIDTH = 46;
 
+    private String deviceHostLabel = "device";
     private ImageButton btnStart;
     private ImageButton btnStop;
     private ImageButton btnClear;
@@ -89,6 +91,7 @@ public class MonitorFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         networkStatusHelper = new NetworkStatusHelper(requireContext());
+        resolveDeviceHostName();
 
         btnStart = view.findViewById(R.id.btnStart);
         btnStop = view.findViewById(R.id.btnStop);
@@ -166,6 +169,28 @@ public class MonitorFragment extends Fragment {
                 handler.postDelayed(this, 1500);
             }
         };
+    }
+
+    private void resolveDeviceHostName() {
+        String name = null;
+        try {
+            name = Settings.Global.getString(
+                    requireContext().getContentResolver(),
+                    Settings.Global.DEVICE_NAME);
+        } catch (Exception ignored) {
+        }
+        if (name == null || name.trim().isEmpty()) {
+            name = android.os.Build.MODEL;
+        }
+        if (name == null || name.trim().isEmpty()) {
+            name = "device";
+        }
+        // Console is ASCII-only; keep prompt width stable
+        name = ascii(name.trim()).replace(' ', '-');
+        if (name.length() > 24) {
+            name = name.substring(0, 24);
+        }
+        deviceHostLabel = name;
     }
 
     private void updateBlockButtonUi() {
@@ -290,9 +315,9 @@ public class MonitorFragment extends Fragment {
         }
         sb.append(boxLine("+", "-")).append('\n');
         if (promptCursorOn) {
-            sb.append("netmonitor@device:~$ _");
+            sb.append("netmonitor@").append(deviceHostLabel).append(":~$ _");
         } else {
-            sb.append("netmonitor@device:~$ ");
+            sb.append("netmonitor@").append(deviceHostLabel).append(":~$ ");
         }
         return sb.toString();
     }
@@ -451,8 +476,20 @@ public class MonitorFragment extends Fragment {
 
         String blockKey = c.packageName != null ? c.packageName
                 : (c.uid > 0 ? "uid:" + c.uid : key);
-        g.blocked = BlockManager.getInstance().shouldBlockPackage(blockKey)
-                || (c.uid > 0 && BlockManager.getInstance().shouldBlock(c.uid));
+
+        BlockManager.AppRule rule = BlockManager.getInstance().getRule(blockKey);
+        boolean bypass = rule != null && rule.bypass
+                || (c.uid > 0 && BlockManager.getInstance().isBypassUid(c.uid));
+
+        boolean out = BlockManager.getInstance().shouldBlockOutPackage(blockKey)
+                || (c.uid > 0 && BlockManager.getInstance().shouldBlockOut(c.uid));
+        boolean in = BlockManager.getInstance().shouldBlockInPackage(blockKey)
+                || (c.uid > 0 && BlockManager.getInstance().shouldBlockIn(c.uid));
+
+        g.bypass = bypass;
+        g.blockedOut = !bypass && out;
+        g.blockedIn = !bypass && in;
+        g.blocked = g.blockedOut || g.blockedIn;
 
         if (c.packageName != null) {
             try {
@@ -486,7 +523,9 @@ public class MonitorFragment extends Fragment {
         requireContext().startForegroundService(intent);
 
         if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).setVpnStatus(
+            MainActivity act = (MainActivity) getActivity();
+            act.markVpnStartPending();
+            act.setVpnStatus(
                     pendingBlockMode ? MainActivity.STATUS_BLOCK : MainActivity.STATUS_FORWARD);
         }
 

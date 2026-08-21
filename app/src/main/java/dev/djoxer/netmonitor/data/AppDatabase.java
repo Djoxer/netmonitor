@@ -22,7 +22,7 @@ import dev.djoxer.netmonitor.data.entity.TrafficSampleEntity;
                 LogEventEntity.class,
                 TrafficSampleEntity.class
         },
-        version = 2,
+        version = 3,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {

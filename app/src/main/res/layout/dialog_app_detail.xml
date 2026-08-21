@@ -11,13 +11,13 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingBottom="12dp">
+        android:paddingBottom="10dp">
 
         <ImageView
             android:id="@+id/detailIcon"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="12dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="10dp"
             android:contentDescription="@null" />
 
         <LinearLayout
@@ -30,61 +30,98 @@
                 android:id="@+id/detailAppName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="@color/md_theme_on_surface_variant"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:textColor="@color/md_theme_on_surface"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <TextView
                 android:id="@+id/detailPackage"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textColor="@color/md_theme_on_surface_variant"
-                android:textSize="12sp" />
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Out / In / Bypass in one row -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingBottom="8dp">
+        android:gravity="center"
+        android:paddingBottom="4dp">
 
-        <TextView
+        <ToggleButton
+            android:id="@+id/switchBlockOut"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_weight="1"
-            android:text="Permanently block"
-            android:textColor="@color/md_theme_on_surface"
-            android:textSize="14sp" />
+            android:layout_marginEnd="4dp"
+            android:textOn="Out"
+            android:textOff="Out"
+            android:textSize="12sp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:background="@drawable/bg_toggle_direction"
+            android:textColor="@color/toggle_direction_text"
+            android:button="@null" />
 
-        <Switch
-            android:id="@+id/switchPermanentBlock"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
+        <ToggleButton
+            android:id="@+id/switchBlockIn"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:textOn="In"
+            android:textOff="In"
+            android:textSize="12sp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:background="@drawable/bg_toggle_direction"
+            android:textColor="@color/toggle_direction_text"
+            android:button="@null" />
+
+        <ToggleButton
+            android:id="@+id/switchBypass"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:textOn="Bypass"
+            android:textOff="Bypass"
+            android:textSize="12sp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:background="@drawable/bg_toggle_bypass"
+            android:textColor="@color/toggle_bypass_text"
+            android:button="@null" />
     </LinearLayout>
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Block schedules (active = blocked)"
-        android:textColor="@color/status_running"
-        android:textStyle="bold"
-        android:paddingTop="8dp"
-        android:paddingBottom="4dp" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="During these times the app is blocked. Outside: allowed (unless permanent block)."
+        android:text="Bypass: no monitoring + log. Needs VPN restart."
         android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="11sp"
         android:paddingBottom="8dp" />
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Schedules (active = blocked both ways)"
+        android:textColor="@color/status_running"
+        android:textStyle="bold"
+        android:paddingBottom="4dp" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerSchedules"
         android:layout_width="match_parent"
-        android:layout_height="120dp"
+        android:layout_height="100dp"
         android:background="@color/md_theme_background" />
 
     <Button
@@ -100,12 +137,12 @@
         android:text="Connections"
         android:textColor="@color/bar_ipv4"
         android:textStyle="bold"
-        android:paddingTop="12dp"
+        android:paddingTop="8dp"
         android:paddingBottom="4dp" />
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="180dp"
+        android:layout_height="140dp"
         android:background="@color/md_theme_background"
         android:fillViewport="true">
 
@@ -124,5 +161,5 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Close"
-        android:layout_marginTop="12dp" />
+        android:layout_marginTop="8dp" />
 </LinearLayout>

@@ -4,6 +4,8 @@ import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.view.Window;
 import android.view.animation.LinearInterpolator;
@@ -39,7 +41,11 @@ public class MainActivity extends AppCompatActivity {
     private ObjectAnimator blinkAnimator;
 
     private TextView sessionTimerText;
-    private final android.os.Handler timerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Handler timerHandler = new Handler(Looper.getMainLooper());
+
+    /** After Start, ignore false "stopped" until service has had time to come up. */
+    private long ignoreStoppedUntilMs = 0L;
+
     private final Runnable timerTick = new Runnable() {
         @Override
         public void run() {
@@ -76,7 +82,6 @@ public class MainActivity extends AppCompatActivity {
         Window window = getWindow();
         WindowCompat.setDecorFitsSystemWindows(window, false);
 
-        // System Bar Farben (für ältere Android Versionen oder Fallback)
         window.setStatusBarColor(android.graphics.Color.TRANSPARENT);
         window.setNavigationBarColor(android.graphics.Color.TRANSPARENT);
 
@@ -90,15 +95,23 @@ public class MainActivity extends AppCompatActivity {
             insetsController.setAppearanceLightNavigationBars(lightTheme);
         }
 
-        // Padding auf das Root-Layout anwenden, damit Content nicht unter System-Bars rutscht
         View root = findViewById(R.id.mainRoot);
         if (root != null) {
             ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
-                androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+                androidx.core.graphics.Insets bars =
+                        insets.getInsets(WindowInsetsCompat.Type.systemBars());
                 v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
                 return WindowInsetsCompat.CONSUMED;
             });
         }
+    }
+
+    /** Call when user starts VPN so a late sync does not flash red stop. */
+    public void markVpnStartPending() {
+        ignoreStoppedUntilMs = System.currentTimeMillis() + 4000L;
+        timerHandler.postDelayed(this::syncVpnStatusFromService, 400L);
+        timerHandler.postDelayed(this::syncVpnStatusFromService, 1200L);
+        timerHandler.postDelayed(this::syncVpnStatusFromService, 2500L);
     }
 
     public void setVpnStatus(int status) {
@@ -137,12 +150,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void syncVpnStatusFromService() {
-        if (!NetVpnService.isServiceRunning()) {
-            setVpnStatus(STATUS_STOPPED);
-        } else if (NetVpnService.isBlockMode()) {
-            setVpnStatus(STATUS_BLOCK);
+        if (NetVpnService.isServiceRunning()) {
+            if (NetVpnService.isBlockMode()) {
+                setVpnStatus(STATUS_BLOCK);
+            } else {
+                setVpnStatus(STATUS_FORWARD);
+            }
+            ignoreStoppedUntilMs = 0L;
+        } else if (System.currentTimeMillis() < ignoreStoppedUntilMs) {
+            // Service still starting – keep green/orange already set by Start
         } else {
-            setVpnStatus(STATUS_FORWARD);
+            setVpnStatus(STATUS_STOPPED);
         }
     }
 

@@ -103,7 +103,7 @@ public class TcpForwarder {
                 String appName = tracker.getAppNameForUid(uid);
                 String blockKey = blockKeyFor(uid, packageName);
 
-                if (isBlocked(uid, blockKey)) {
+                if (isBlockedOut(uid, blockKey)) {
                     LogWriter.getInstance().log(
                             blockKey,
                             appName != null ? appName : blockKey,
@@ -148,7 +148,7 @@ public class TcpForwarder {
                 return;
             }
 
-            if (isBlocked(session.uid, session.blockKey)) {
+            if (isBlockedOut(session.uid, session.blockKey)) {
                 LogWriter.getInstance().log(
                         session.blockKey,
                         session.appName != null ? session.appName : session.blockKey,
@@ -209,9 +209,14 @@ public class TcpForwarder {
         return "unknown";
     }
 
-    private static boolean isBlocked(int uid, String blockKey) {
-        if (uid > 0 && BlockManager.getInstance().shouldBlock(uid)) return true;
-        return blockKey != null && BlockManager.getInstance().shouldBlockPackage(blockKey);
+    private static boolean isBlockedOut(int uid, String blockKey) {
+        if (uid > 0 && BlockManager.getInstance().shouldBlockOut(uid)) return true;
+        return blockKey != null && BlockManager.getInstance().shouldBlockOutPackage(blockKey);
+    }
+
+    private static boolean isBlockedIn(int uid, String blockKey) {
+        if (uid > 0 && BlockManager.getInstance().shouldBlockIn(uid)) return true;
+        return blockKey != null && BlockManager.getInstance().shouldBlockInPackage(blockKey);
     }
 
     private void cleanupLoop() {
@@ -316,7 +321,7 @@ public class TcpForwarder {
                                 "TCP " + remoteIpStr + ":" + remotePort);
                     }
 
-                    if (isBlocked(uid, blockKey)) {
+                    if (isBlockedIn(uid, blockKey)) {
                         LogWriter.getInstance().log(
                                 blockKey,
                                 appName != null ? appName : blockKey,

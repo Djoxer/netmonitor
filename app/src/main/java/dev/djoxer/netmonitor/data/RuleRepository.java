@@ -4,10 +4,8 @@ import android.content.Context;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,11 +33,14 @@ public class RuleRepository {
 
     public void loadIntoMemoryAsync(Runnable onDone) {
         IO.execute(() -> {
-            Set<String> permanent = new HashSet<>();
+            Map<String, BlockManager.AppRule> permanent = new HashMap<>();
             Map<String, List<BlockSchedule>> scheduleMap = new HashMap<>();
 
             for (BlockRuleEntity r : db.blockRuleDao().getAll()) {
-                if (r.permanentlyBlocked) permanent.add(r.packageName);
+                permanent.put(
+                        r.packageName,
+                        new BlockManager.AppRule(r.blockOut, r.blockIn, r.bypass)
+                );
                 if (r.uid > 0) {
                     BlockManager.getInstance().registerUid(r.uid, r.packageName);
                 }
@@ -51,7 +52,8 @@ public class RuleRepository {
                     list = new ArrayList<>();
                     scheduleMap.put(s.packageName, list);
                 }
-                list.add(new BlockSchedule(s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
+                list.add(new BlockSchedule(
+                        s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
             }
 
             BlockManager.getInstance().loadFromDisk(permanent, scheduleMap);
@@ -59,12 +61,58 @@ public class RuleRepository {
         });
     }
 
-    public void setPermanentBlockAsync(String packageName, int uid, String appName, boolean blocked) {
+    public void setDirectionBlockAsync(String packageName, int uid, String appName,
+                                       boolean blockOut, boolean blockIn) {
         IO.execute(() -> {
-            db.blockRuleDao().upsert(new BlockRuleEntity(packageName, uid, appName, blocked));
-            BlockManager.getInstance().setPermanentBlock(packageName, blocked);
-            if (uid > 0) BlockManager.getInstance().registerUid(uid, packageName);
+            BlockRuleEntity existing = null;
+            for (BlockRuleEntity r : db.blockRuleDao().getAll()) {
+                if (packageName.equals(r.packageName)) {
+                    existing = r;
+                    break;
+                }
+            }
+            boolean bypass = existing != null && existing.bypass;
+            final boolean out = bypass ? false : blockOut;
+            final boolean in = bypass ? false : blockIn;
+
+            db.blockRuleDao().upsert(new BlockRuleEntity(
+                    packageName, uid, appName, out, in, bypass));
+            BlockManager.getInstance().setRule(packageName, out, in, bypass);
+            if (uid > 0) {
+                BlockManager.getInstance().registerUid(uid, packageName);
+            }
         });
+    }
+
+    public void setBypassAsync(String packageName, int uid, String appName, boolean bypass) {
+        IO.execute(() -> {
+            boolean blockOut = false;
+            boolean blockIn = false;
+            if (!bypass) {
+                for (BlockRuleEntity r : db.blockRuleDao().getAll()) {
+                    if (packageName.equals(r.packageName)) {
+                        blockOut = r.blockOut;
+                        blockIn = r.blockIn;
+                        break;
+                    }
+                }
+            }
+            final boolean out = blockOut;
+            final boolean in = blockIn;
+            final boolean bypassFlag = bypass;
+
+            db.blockRuleDao().upsert(new BlockRuleEntity(
+                    packageName, uid, appName, out, in, bypassFlag));
+            BlockManager.getInstance().setRule(packageName, out, in, bypassFlag);
+            if (uid > 0) {
+                BlockManager.getInstance().registerUid(uid, packageName);
+            }
+        });
+    }
+
+    public void setPermanentBlockAsync(String packageName, int uid, String appName,
+                                       boolean blocked) {
+        setDirectionBlockAsync(packageName, uid, appName, blocked, blocked);
     }
 
     public void getSchedulesAsync(String packageName, SchedulesCallback callback) {
@@ -72,7 +120,8 @@ public class RuleRepository {
             List<ScheduleEntity> entities = db.scheduleDao().getForPackage(packageName);
             List<BlockSchedule> result = new ArrayList<>();
             for (ScheduleEntity s : entities) {
-                result.add(new BlockSchedule(s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
+                result.add(new BlockSchedule(
+                        s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
             }
             if (callback != null) {
                 callback.onResult(result);
@@ -83,7 +132,8 @@ public class RuleRepository {
     public void addScheduleAsync(String packageName, int daysMask, int startMinute, int endMinute,
                                  Callback callback) {
         IO.execute(() -> {
-            ScheduleEntity entity = new ScheduleEntity(packageName, daysMask, startMinute, endMinute);
+            ScheduleEntity entity = new ScheduleEntity(
+                    packageName, daysMask, startMinute, endMinute);
             long id = db.scheduleDao().insert(entity);
             entity.id = (int) id;
             reloadPackageSchedules(packageName);
@@ -103,7 +153,8 @@ public class RuleRepository {
         List<ScheduleEntity> entities = db.scheduleDao().getForPackage(packageName);
         List<BlockSchedule> list = new ArrayList<>();
         for (ScheduleEntity s : entities) {
-            list.add(new BlockSchedule(s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
+            list.add(new BlockSchedule(
+                    s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
         }
         BlockManager.getInstance().setSchedules(packageName, list);
     }
@@ -111,15 +162,20 @@ public class RuleRepository {
     public void clearPermanentBlocksAsync(Callback callback) {
         IO.execute(() -> {
             for (BlockRuleEntity r : db.blockRuleDao().getAll()) {
-                r.permanentlyBlocked = false;
+                r.blockOut = false;
+                r.blockIn = false;
                 db.blockRuleDao().upsert(r);
             }
-            // Reload memory
-            Set<String> permanent = new HashSet<>();
+            Map<String, BlockManager.AppRule> permanent = new HashMap<>();
             Map<String, List<BlockSchedule>> scheduleMap = new HashMap<>();
+            for (BlockRuleEntity r : db.blockRuleDao().getAll()) {
+                permanent.put(r.packageName,
+                        new BlockManager.AppRule(r.blockOut, r.blockIn, r.bypass));
+            }
             for (ScheduleEntity s : db.scheduleDao().getAll()) {
                 scheduleMap.computeIfAbsent(s.packageName, k -> new ArrayList<>())
-                        .add(new BlockSchedule(s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
+                        .add(new BlockSchedule(
+                                s.id, s.packageName, s.daysMask, s.startMinute, s.endMinute));
             }
             BlockManager.getInstance().loadFromDisk(permanent, scheduleMap);
             if (callback != null) callback.onDone();
@@ -131,9 +187,10 @@ public class RuleRepository {
             for (ScheduleEntity s : db.scheduleDao().getAll()) {
                 db.scheduleDao().deleteById(s.id);
             }
-            Set<String> permanent = new HashSet<>();
+            Map<String, BlockManager.AppRule> permanent = new HashMap<>();
             for (BlockRuleEntity r : db.blockRuleDao().getAll()) {
-                if (r.permanentlyBlocked) permanent.add(r.packageName);
+                permanent.put(r.packageName,
+                        new BlockManager.AppRule(r.blockOut, r.blockIn, r.bypass));
             }
             BlockManager.getInstance().loadFromDisk(permanent, new HashMap<>());
             if (callback != null) callback.onDone();
