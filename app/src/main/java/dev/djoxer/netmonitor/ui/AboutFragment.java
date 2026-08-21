@@ -56,6 +56,12 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.12.1
+            • Tab icons only; About/Settings order swap
+            • Header theme toggle + centered session timer
+            • Fix theme-switch crash on Settings/About
+            • VPN status icon stays right-aligned
+            
             v1.12.0
             • Profiles with blacklist / whitelist modes
             • Settings profile dropdown (activate, add, delete, mode)

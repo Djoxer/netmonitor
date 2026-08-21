@@ -9,6 +9,7 @@ import android.os.Looper;
 import android.view.View;
 import android.view.Window;
 import android.view.animation.LinearInterpolator;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -31,19 +32,24 @@ import dev.djoxer.netmonitor.vpn.NetVpnService;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String[] TAB_TITLES = {"Monitor", "Log", "Settings", "About"};
+    private static final int[] TAB_ICONS = {
+            R.drawable.ic_tab_monitor,
+            R.drawable.ic_tab_log,
+            R.drawable.ic_tab_about,
+            R.drawable.ic_tab_settings
+    };
 
     public static final int STATUS_STOPPED = 0;
     public static final int STATUS_FORWARD = 1;
     public static final int STATUS_BLOCK = 2;
 
     private ImageView headerStatusIcon;
+    private ImageButton btnThemeToggle;
     private ObjectAnimator blinkAnimator;
 
     private TextView sessionTimerText;
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
 
-    /** After Start, ignore false "stopped" until service has had time to come up. */
     private long ignoreStoppedUntilMs = 0L;
 
     private final Runnable timerTick = new Runnable() {
@@ -61,27 +67,56 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         setupEdgeToEdge();
 
-        TextView title = findViewById(R.id.titleText);
-        if (title != null) {
-            title.setTextColor(ContextCompat.getColor(this, R.color.md_theme_on_surface));
-        }
-
         headerStatusIcon = findViewById(R.id.headerStatusIcon);
         sessionTimerText = findViewById(R.id.sessionTimerText);
+        btnThemeToggle = findViewById(R.id.btnThemeToggle);
 
         setVpnStatus(STATUS_STOPPED);
+        updateThemeToggleIcon();
+
+        if (btnThemeToggle != null) {
+            btnThemeToggle.setOnClickListener(v -> toggleTheme());
+        }
 
         ViewPager2 pager = findViewById(R.id.viewPager);
         TabLayout tabs = findViewById(R.id.tabLayout);
         pager.setAdapter(new MainPagerAdapter(this));
-        new TabLayoutMediator(tabs, pager, (tab, position) ->
-                tab.setText(TAB_TITLES[position])).attach();
+        new TabLayoutMediator(tabs, pager, (tab, position) -> {
+            tab.setText((CharSequence) null);
+            tab.setIcon(TAB_ICONS[position]);
+        }).attach();
+    }
+
+    private void toggleTheme() {
+        int mode = ThemePrefs.getMode(this);
+        boolean currentlyLight = isEffectivelyLight(mode);
+        // setMode already applies night mode and typically recreates the Activity
+        ThemePrefs.setMode(this,
+                currentlyLight ? ThemePrefs.MODE_DARK : ThemePrefs.MODE_LIGHT);
+        // do not call recreate() here
+    }
+
+    private boolean isEffectivelyLight(int mode) {
+        if (mode == ThemePrefs.MODE_LIGHT) return true;
+        if (mode == ThemePrefs.MODE_DARK) return false;
+        int night = getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK;
+        return night != Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    private void updateThemeToggleIcon() {
+        if (btnThemeToggle == null) return;
+        int mode = ThemePrefs.getMode(this);
+        boolean light = isEffectivelyLight(mode);
+        // Light UI → show moon (switch to dark); Dark UI → show sun
+        btnThemeToggle.setImageResource(light ? R.drawable.ic_theme_moon : R.drawable.ic_theme_sun);
+        btnThemeToggle.setColorFilter(
+                ContextCompat.getColor(this, R.color.md_theme_on_surface));
     }
 
     private void setupEdgeToEdge() {
         Window window = getWindow();
         WindowCompat.setDecorFitsSystemWindows(window, false);
-
         window.setStatusBarColor(android.graphics.Color.TRANSPARENT);
         window.setNavigationBarColor(android.graphics.Color.TRANSPARENT);
 
@@ -106,7 +141,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Call when user starts VPN so a late sync does not flash red stop. */
     public void markVpnStartPending() {
         ignoreStoppedUntilMs = System.currentTimeMillis() + 4000L;
         timerHandler.postDelayed(this::syncVpnStatusFromService, 400L);
@@ -158,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
             }
             ignoreStoppedUntilMs = 0L;
         } else if (System.currentTimeMillis() < ignoreStoppedUntilMs) {
-            // Service still starting – keep green/orange already set by Start
+            // keep pending start icon
         } else {
             setVpnStatus(STATUS_STOPPED);
         }
@@ -168,7 +202,7 @@ public class MainActivity extends AppCompatActivity {
         if (sessionTimerText == null) return;
         long elapsed = NetVpnService.getSessionElapsedMs();
         if (elapsed <= 0L || !NetVpnService.isServiceRunning()) {
-            sessionTimerText.setVisibility(View.GONE);
+            sessionTimerText.setVisibility(View.INVISIBLE);
             sessionTimerText.setText("00:00:00");
             return;
         }
@@ -184,6 +218,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         syncVpnStatusFromService();
+        updateThemeToggleIcon();
         timerHandler.removeCallbacks(timerTick);
         timerHandler.post(timerTick);
     }

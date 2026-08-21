@@ -15,11 +15,15 @@ public class MainPagerAdapter extends FragmentStateAdapter {
     @Override
     public Fragment createFragment(int position) {
         switch (position) {
-            case 1: return new LogFragment();
-            case 2: return new SettingsFragment();
-            case 3: return new AboutFragment();
+            case 1:
+                return new LogFragment();
+            case 2:
+                return new AboutFragment();
+            case 3:
+                return new SettingsFragment();
             case 0:
-            default: return new MonitorFragment();
+            default:
+                return new MonitorFragment();
         }
     }
 

@@ -21,8 +21,15 @@ public final class ThemePrefs {
     }
 
     public static void setMode(Context context, int mode) {
+        if (mode != MODE_LIGHT && mode != MODE_DARK && mode != MODE_SYSTEM) {
+            mode = MODE_DARK;
+        }
+        int current = getMode(context);
+        if (current == mode) return;
+
         prefs(context).edit().putInt(KEY_THEME, mode).apply();
         apply(mode);
+        // AppCompat recreates activities as needed – callers must not recreate() again
     }
 
     public static void applyStored(Context context) {

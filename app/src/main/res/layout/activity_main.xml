@@ -1,67 +1,81 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/mainRoot"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/md_theme_background">
-
-    <!-- Header: title left, status icon right -->
-    <LinearLayout
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        android:id="@+id/mainRoot"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="8dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@color/md_theme_background">
 
-        <TextView
-            android:id="@+id/titleText"
-            android:layout_width="0dp"
+    <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="NetMonitor"
-            android:textColor="@color/md_theme_on_surface"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="6dp"
+            android:minHeight="48dp">
 
-        <TextView
-            android:id="@+id/sessionTimerText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="10dp"
-            android:fontFamily="monospace"
-            android:textColor="@color/md_theme_on_surface_variant"
-            android:textSize="13sp"
-            android:text="00:00:00"
-            android:visibility="gone" />
+        <!-- LEFT: theme toggle -->
+        <ImageButton
+                android:id="@+id/btnThemeToggle"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Toggle theme"
+                android:scaleType="centerInside"
+                android:padding="8dp"
+                app:tint="@color/md_theme_on_surface" />
 
+        <!-- CENTER: timer (keeps space even when hidden) -->
+        <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="40dp">
+
+            <TextView
+                    android:id="@+id/sessionTimerText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:gravity="center"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/md_theme_on_surface"
+                    android:textSize="20sp"
+                    android:letterSpacing="0.08"
+                    android:text="00:00:00"
+                    android:visibility="invisible" />
+        </FrameLayout>
+
+        <!-- RIGHT: VPN status (always anchored) -->
         <ImageView
-            android:id="@+id/headerStatusIcon"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_gravity="end|center_vertical"
-            android:contentDescription="@string/app_name"
-            android:src="@android:drawable/ic_media_pause"
-            app:tint="@color/status_stopped" />
+                android:id="@+id/headerStatusIcon"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:contentDescription="@string/app_name"
+                android:src="@android:drawable/ic_media_pause"
+                app:tint="@color/status_stopped" />
     </LinearLayout>
 
     <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tabLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/md_theme_surface"
-        app:tabTextColor="@color/md_theme_on_surface_variant"
-        app:tabSelectedTextColor="@color/md_theme_primary"
-        app:tabIndicatorColor="@color/md_theme_primary" />
+            android:id="@+id/tabLayout"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@color/md_theme_surface"
+            app:tabIconTint="@color/md_theme_on_surface"
+            app:tabIndicatorColor="@color/md_theme_primary"
+            app:tabRippleColor="@color/md_theme_primary"
+            app:tabMode="fixed"
+            app:tabGravity="fill" />
 
     <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/viewPager"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
+            android:id="@+id/viewPager"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 </LinearLayout>

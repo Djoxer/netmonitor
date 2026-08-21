@@ -1,5 +1,6 @@
 package dev.djoxer.netmonitor.ui;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
@@ -80,20 +81,27 @@ public class SettingsFragment extends Fragment {
         RadioButton themeLight = view.findViewById(R.id.themeLight);
         RadioButton themeDark = view.findViewById(R.id.themeDark);
 
+        // Prevent listener during initial bind
+        final boolean[] themeReady = { false };
+
+        themeGroup.setOnCheckedChangeListener(null);
         int mode = ThemePrefs.getMode(requireContext());
         if (mode == ThemePrefs.MODE_LIGHT) themeLight.setChecked(true);
         else if (mode == ThemePrefs.MODE_SYSTEM) themeSystem.setChecked(true);
         else themeDark.setChecked(true);
 
         themeGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (!themeReady[0] || !isAdded()) return;
+
             int newMode = ThemePrefs.MODE_DARK;
             if (checkedId == R.id.themeLight) newMode = ThemePrefs.MODE_LIGHT;
             else if (checkedId == R.id.themeSystem) newMode = ThemePrefs.MODE_SYSTEM;
-            if (newMode != ThemePrefs.getMode(requireContext())) {
-                ThemePrefs.setMode(requireContext(), newMode);
-                requireActivity().recreate();
-            }
+
+            ThemePrefs.setMode(requireContext(), newMode);
         });
+
+        // Enable only after first layout pass (avoids restore firing)
+        themeGroup.post(() -> themeReady[0] = true);
 
         btnClearLog.setOnClickListener(v -> confirm(
                 "Clear event log?",
@@ -180,14 +188,26 @@ public class SettingsFragment extends Fragment {
     }
 
     private void reloadProfilesUi() {
-        if (profileSpinner == null || getContext() == null) return;
-        ProfileManager.getInstance().listProfilesAsync(requireContext(), (profiles, activeId) -> {
-            if (getActivity() == null) return;
-            getActivity().runOnUiThread(() -> bindProfiles(profiles, activeId));
+        if (!isAdded() || profileSpinner == null) return;
+        Context ctx = getContext();
+        if (ctx == null) return;
+
+        ProfileManager.getInstance().listProfilesAsync(ctx, (profiles, activeId) -> {
+            if (!isAdded()) return;
+            View v = getView();
+            if (v == null) return;
+            v.post(() -> {
+                if (!isAdded() || getContext() == null || profileSpinner == null) return;
+                bindProfiles(profiles, activeId);
+            });
         });
     }
 
     private void bindProfiles(List<ProfileEntity> profiles, long activeId) {
+        if (!isAdded() || profileSpinner == null) return;
+        Context ctx = getContext();
+        if (ctx == null) return;
+
         profileList.clear();
         if (profiles != null) profileList.addAll(profiles);
         selectedProfileId = activeId;
@@ -206,7 +226,7 @@ public class SettingsFragment extends Fragment {
         }
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                requireContext(),
+                ctx,
                 android.R.layout.simple_spinner_item,
                 labels);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -344,9 +364,10 @@ public class SettingsFragment extends Fragment {
     }
 
     private void uiDone(String msg) {
-        if (getActivity() == null) return;
+        if (!isAdded() || getActivity() == null) return;
         getActivity().runOnUiThread(() -> {
-            status.setText(msg);
+            if (!isAdded()) return;
+            if (status != null) status.setText(msg);
             Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show();
         });
     }
