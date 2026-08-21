@@ -3,26 +3,37 @@ package dev.djoxer.netmonitor.block;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * In-memory block decisions for the hot path.
- * Global block is handled by NetVpnService; this covers per-app rules.
+ * Global block is handled by NetVpnService; this covers per-app rules + profile mode.
  */
 public class BlockManager {
+
+    public static final int MODE_BLACKLIST = 0;
+    public static final int MODE_WHITELIST = 1;
 
     public static final class AppRule {
         public final boolean blockOut;
         public final boolean blockIn;
         public final boolean bypass;
+        public final boolean allowed;
 
-        public AppRule(boolean blockOut, boolean blockIn, boolean bypass) {
+        public AppRule(boolean blockOut, boolean blockIn, boolean bypass, boolean allowed) {
             this.blockOut = blockOut;
             this.blockIn = blockIn;
             this.bypass = bypass;
+            this.allowed = allowed;
+        }
+
+        public AppRule(boolean blockOut, boolean blockIn, boolean bypass) {
+            this(blockOut, blockIn, bypass, false);
         }
     }
 
@@ -37,14 +48,33 @@ public class BlockManager {
     private final Map<String, CopyOnWriteArrayList<BlockSchedule>> schedules =
             new ConcurrentHashMap<>();
 
+    private volatile int mode = MODE_BLACKLIST;
+
     private BlockManager() {}
 
+    public void setMode(int mode) {
+        this.mode = (mode == MODE_WHITELIST) ? MODE_WHITELIST : MODE_BLACKLIST;
+    }
+
+    public int getMode() {
+        return mode;
+    }
+
+    public boolean isWhitelistMode() {
+        return mode == MODE_WHITELIST;
+    }
+
     public void setRule(String key, boolean blockOut, boolean blockIn, boolean bypass) {
+        setRule(key, blockOut, blockIn, bypass, false);
+    }
+
+    public void setRule(String key, boolean blockOut, boolean blockIn, boolean bypass,
+                        boolean allowed) {
         if (key == null || key.isEmpty()) return;
-        if (!blockOut && !blockIn && !bypass) {
+        if (!blockOut && !blockIn && !bypass && !allowed) {
             rules.remove(key);
         } else {
-            rules.put(key, new AppRule(blockOut, blockIn, bypass));
+            rules.put(key, new AppRule(blockOut, blockIn, bypass, allowed));
         }
     }
 
@@ -57,10 +87,11 @@ public class BlockManager {
         if (packageName == null) return;
         AppRule existing = rules.get(packageName);
         boolean bypass = existing != null && existing.bypass;
+        boolean allowed = existing != null && existing.allowed;
         if (blocked) {
-            setRule(packageName, true, true, false);
-        } else if (bypass) {
-            setRule(packageName, false, false, true);
+            setRule(packageName, true, true, false, false);
+        } else if (bypass || allowed) {
+            setRule(packageName, false, false, bypass, allowed);
         } else {
             rules.remove(packageName);
         }
@@ -103,6 +134,11 @@ public class BlockManager {
         return pkg != null && isBypass(pkg);
     }
 
+    public boolean isAllowed(String key) {
+        AppRule r = getRule(key);
+        return r != null && (r.allowed || r.bypass);
+    }
+
     public List<String> getBypassPackages() {
         List<String> out = new ArrayList<>();
         for (Map.Entry<String, AppRule> e : rules.entrySet()) {
@@ -133,7 +169,6 @@ public class BlockManager {
         return directionBlockedKey(key, false);
     }
 
-    /** True if out or in is blocked (tile badge / legacy). */
     public boolean shouldBlock(int uid) {
         if (uid <= 0) return false;
         if (shouldBlockPackage("uid:" + uid)) return true;
@@ -160,17 +195,13 @@ public class BlockManager {
         }
     }
 
-    /**
-     * Legacy loader used by older RuleRepository calls that only pass package names.
-     * Treats each name as blockOut+blockIn.
-     */
-    public void loadFromDisk(java.util.Set<String> permanent,
+    public void loadFromDisk(Set<String> permanent,
                              Map<String, List<BlockSchedule>> scheduleMap) {
         rules.clear();
         schedules.clear();
         if (permanent != null) {
             for (String pkg : permanent) {
-                rules.put(pkg, new AppRule(true, true, false));
+                rules.put(pkg, new AppRule(true, true, false, false));
             }
         }
         if (scheduleMap != null) {
@@ -186,19 +217,42 @@ public class BlockManager {
         }
         if (directionBlockedKey("uid:" + uid, out)) return true;
         String pkg = uidToPackage.get(uid);
-        return pkg != null && directionBlockedKey(pkg, out);
+        if (pkg != null) return directionBlockedKey(pkg, out);
+        // Unknown package under whitelist: block
+        return mode == MODE_WHITELIST;
     }
 
     private boolean directionBlockedKey(String key, boolean out) {
-        if (key == null || key.isEmpty()) return false;
+        if (key == null || key.isEmpty()) {
+            return mode == MODE_WHITELIST;
+        }
 
         AppRule r = rules.get(key);
+
+        if (r != null && r.bypass) {
+            return false;
+        }
+
+        // Schedules still force full block when active
+        if (scheduleActive(key)) {
+            return true;
+        }
+
+        if (mode == MODE_WHITELIST) {
+            if (r != null && r.allowed) return false;
+            // Not on allow list → block both directions
+            return true;
+        }
+
+        // Blacklist
         if (r != null) {
-            if (r.bypass) return false;
             if (out && r.blockOut) return true;
             if (!out && r.blockIn) return true;
         }
+        return false;
+    }
 
+    private boolean scheduleActive(String key) {
         List<BlockSchedule> list = schedules.get(key);
         if (list == null || list.isEmpty()) return false;
 

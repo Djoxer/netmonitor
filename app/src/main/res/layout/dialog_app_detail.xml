@@ -60,10 +60,10 @@
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
-            android:layout_marginEnd="4dp"
+            android:layout_marginEnd="3dp"
             android:textOn="Out"
             android:textOff="Out"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:minHeight="0dp"
             android:minWidth="0dp"
             android:background="@drawable/bg_toggle_direction"
@@ -75,11 +75,11 @@
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="4dp"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
             android:textOn="In"
             android:textOff="In"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:minHeight="0dp"
             android:minWidth="0dp"
             android:background="@drawable/bg_toggle_direction"
@@ -87,14 +87,30 @@
             android:button="@null" />
 
         <ToggleButton
+            android:id="@+id/switchAllow"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:textOn="Allow"
+            android:textOff="Allow"
+            android:textSize="11sp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:background="@drawable/bg_toggle_bypass"
+            android:textColor="@color/toggle_bypass_text"
+            android:button="@null" />
+
+        <ToggleButton
             android:id="@+id/switchBypass"
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
-            android:layout_marginStart="4dp"
+            android:layout_marginStart="3dp"
             android:textOn="Bypass"
             android:textOff="Bypass"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:minHeight="0dp"
             android:minWidth="0dp"
             android:background="@drawable/bg_toggle_bypass"
@@ -103,9 +119,9 @@
     </LinearLayout>
 
     <TextView
+        android:id="@+id/profileModeHint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Bypass: no monitoring + log. Needs VPN restart."
         android:textColor="@color/md_theme_on_surface_variant"
         android:textSize="11sp"
         android:paddingBottom="8dp" />

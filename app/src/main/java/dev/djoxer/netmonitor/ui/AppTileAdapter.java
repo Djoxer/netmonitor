@@ -68,6 +68,10 @@ public class AppTileAdapter extends RecyclerView.Adapter<AppTileAdapter.Holder> 
             h.badge.setVisibility(View.VISIBLE);
             h.badge.setText("BYPASS");
             h.badge.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.bar_ipv4));
+        } else if (g.allowed) {
+            h.badge.setVisibility(View.VISIBLE);
+            h.badge.setText("ALLOW");
+            h.badge.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.status_running));
         } else if (mode == Mode.OUT && g.blockedOut) {
             h.badge.setVisibility(View.VISIBLE);
             h.badge.setText("BLOCK");

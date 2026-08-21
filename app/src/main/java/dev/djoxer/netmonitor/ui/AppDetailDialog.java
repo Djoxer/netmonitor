@@ -40,12 +40,15 @@ public class AppDetailDialog extends DialogFragment {
 
     private ToggleButton switchBlockOut;
     private ToggleButton switchBlockIn;
+    private ToggleButton switchAllow;
     private ToggleButton switchBypass;
+    private TextView profileModeHint;
 
     private String blockKey;
     private String displayName;
     private int uid;
     private boolean canBlock;
+    private boolean whitelistMode;
 
     public static AppDetailDialog newInstance(AppGroup group) {
         AppDetailDialog d = new AppDetailDialog();
@@ -72,7 +75,9 @@ public class AppDetailDialog extends DialogFragment {
         TextView pkg = view.findViewById(R.id.detailPackage);
         switchBlockOut = view.findViewById(R.id.switchBlockOut);
         switchBlockIn = view.findViewById(R.id.switchBlockIn);
+        switchAllow = view.findViewById(R.id.switchAllow);
         switchBypass = view.findViewById(R.id.switchBypass);
+        profileModeHint = view.findViewById(R.id.profileModeHint);
         RecyclerView recyclerSchedules = view.findViewById(R.id.recyclerSchedules);
         Button btnAdd = view.findViewById(R.id.btnAddSchedule);
         TextView connections = view.findViewById(R.id.detailConnections);
@@ -93,12 +98,10 @@ public class AppDetailDialog extends DialogFragment {
         } else {
             blockKey = "unknown";
         }
-
         canBlock = blockKey != null && !blockKey.isEmpty();
 
         name.setText(displayName);
         pkg.setText(packageName != null ? packageName : "no package");
-
         if (group != null && group.icon != null) {
             icon.setImageDrawable(group.icon);
         } else {
@@ -124,62 +127,33 @@ public class AppDetailDialog extends DialogFragment {
                 }
             }
         }
-        if (connCount == 0) {
-            sb.append("Connections: 0\n\nNo connections.");
-        }
+        if (connCount == 0) sb.append("Connections: 0\n\nNo connections.");
         connections.setText(sb.toString());
+
+        whitelistMode = BlockManager.getInstance().isWhitelistMode();
+        if (profileModeHint != null) {
+            if (whitelistMode) {
+                profileModeHint.setText(
+                        "Whitelist: all blocked unless Allow/Bypass. Bypass needs VPN restart.");
+            } else {
+                profileModeHint.setText(
+                        "Blacklist: block Out/In as set. Bypass needs VPN restart.");
+            }
+        }
 
         BlockManager.AppRule rule = BlockManager.getInstance().getRule(blockKey);
         boolean out = rule != null && rule.blockOut;
         boolean in = rule != null && rule.blockIn;
         boolean bypass = rule != null && rule.bypass;
+        boolean allowed = rule != null && rule.allowed;
 
-        switchBlockOut.setOnCheckedChangeListener(null);
-        switchBlockIn.setOnCheckedChangeListener(null);
-        switchBypass.setOnCheckedChangeListener(null);
-
+        clearListeners();
         switchBlockOut.setChecked(out);
         switchBlockIn.setChecked(in);
+        switchAllow.setChecked(allowed);
         switchBypass.setChecked(bypass);
-        applySwitchEnableState(bypass);
-
-        switchBlockOut.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (!canBlock || switchBypass.isChecked()) return;
-            ruleRepository.setDirectionBlockAsync(
-                    blockKey, uid, displayName,
-                    isChecked, switchBlockIn.isChecked());
-            if (uid > 0) {
-                BlockManager.getInstance().registerUid(uid, blockKey);
-            }
-        });
-
-        switchBlockIn.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (!canBlock || switchBypass.isChecked()) return;
-            ruleRepository.setDirectionBlockAsync(
-                    blockKey, uid, displayName,
-                    switchBlockOut.isChecked(), isChecked);
-            if (uid > 0) {
-                BlockManager.getInstance().registerUid(uid, blockKey);
-            }
-        });
-
-        switchBypass.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (!canBlock) return;
-            ruleRepository.setBypassAsync(blockKey, uid, displayName, isChecked);
-            if (uid > 0) {
-                BlockManager.getInstance().registerUid(uid, blockKey);
-            }
-            if (isChecked) {
-                switchBlockOut.setOnCheckedChangeListener(null);
-                switchBlockIn.setOnCheckedChangeListener(null);
-                switchBlockOut.setChecked(false);
-                switchBlockIn.setChecked(false);
-                wireDirectionListeners();
-            }
-            applySwitchEnableState(isChecked);
-            Toast.makeText(requireContext(),
-                    "Restart VPN to apply bypass", Toast.LENGTH_SHORT).show();
-        });
+        applyEnableState(bypass, allowed);
+        wireListeners();
 
         scheduleAdapter = new ScheduleAdapter(schedule -> {
             if (!canBlock) return;
@@ -188,7 +162,6 @@ public class AppDetailDialog extends DialogFragment {
         });
         recyclerSchedules.setLayoutManager(new LinearLayoutManager(requireContext()));
         recyclerSchedules.setAdapter(scheduleAdapter);
-
         btnAdd.setEnabled(canBlock);
         btnAdd.setOnClickListener(v -> showAddScheduleDialog(blockKey));
         btnClose.setOnClickListener(v -> dismiss());
@@ -196,57 +169,83 @@ public class AppDetailDialog extends DialogFragment {
         AlertDialog dialog = new AlertDialog.Builder(requireContext())
                 .setView(view)
                 .create();
-
         view.post(this::reloadSchedules);
         return dialog;
     }
 
-    private void wireDirectionListeners() {
-        switchBlockOut.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (!canBlock || switchBypass.isChecked()) return;
-            ruleRepository.setDirectionBlockAsync(
-                    blockKey, uid, displayName,
-                    isChecked, switchBlockIn.isChecked());
-            if (uid > 0) {
-                BlockManager.getInstance().registerUid(uid, blockKey);
-            }
-        });
-        switchBlockIn.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (!canBlock || switchBypass.isChecked()) return;
-            ruleRepository.setDirectionBlockAsync(
-                    blockKey, uid, displayName,
-                    switchBlockOut.isChecked(), isChecked);
-            if (uid > 0) {
-                BlockManager.getInstance().registerUid(uid, blockKey);
-            }
-        });
+    private void clearListeners() {
+        switchBlockOut.setOnCheckedChangeListener(null);
+        switchBlockIn.setOnCheckedChangeListener(null);
+        switchAllow.setOnCheckedChangeListener(null);
+        switchBypass.setOnCheckedChangeListener(null);
     }
 
-    private void applySwitchEnableState(boolean bypass) {
-        switchBlockOut.setEnabled(canBlock && !bypass);
-        switchBlockIn.setEnabled(canBlock && !bypass);
+    private void applyEnableState(boolean bypass, boolean allowed) {
+        // Allow is mainly for whitelist; still editable always
+        switchAllow.setEnabled(canBlock && !bypass);
+        switchBlockOut.setEnabled(canBlock && !bypass && !allowed);
+        switchBlockIn.setEnabled(canBlock && !bypass && !allowed);
         switchBypass.setEnabled(canBlock);
+        if (switchAllow != null) {
+            switchAllow.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void wireListeners() {
+        switchBlockOut.setOnCheckedChangeListener((b, checked) -> {
+            if (!canBlock || switchBypass.isChecked() || switchAllow.isChecked()) return;
+            ruleRepository.setDirectionBlockAsync(
+                    blockKey, uid, displayName, checked, switchBlockIn.isChecked());
+            if (uid > 0) BlockManager.getInstance().registerUid(uid, blockKey);
+        });
+        switchBlockIn.setOnCheckedChangeListener((b, checked) -> {
+            if (!canBlock || switchBypass.isChecked() || switchAllow.isChecked()) return;
+            ruleRepository.setDirectionBlockAsync(
+                    blockKey, uid, displayName, switchBlockOut.isChecked(), checked);
+            if (uid > 0) BlockManager.getInstance().registerUid(uid, blockKey);
+        });
+        switchAllow.setOnCheckedChangeListener((b, checked) -> {
+            if (!canBlock || switchBypass.isChecked()) return;
+            if (checked) {
+                clearListeners();
+                switchBlockOut.setChecked(false);
+                switchBlockIn.setChecked(false);
+                wireListeners();
+            }
+            ruleRepository.setAllowedAsync(blockKey, uid, displayName, checked);
+            applyEnableState(switchBypass.isChecked(), checked);
+            if (uid > 0) BlockManager.getInstance().registerUid(uid, blockKey);
+        });
+        switchBypass.setOnCheckedChangeListener((b, checked) -> {
+            if (!canBlock) return;
+            if (checked) {
+                clearListeners();
+                switchBlockOut.setChecked(false);
+                switchBlockIn.setChecked(false);
+                switchAllow.setChecked(false);
+                wireListeners();
+            }
+            ruleRepository.setBypassAsync(blockKey, uid, displayName, checked);
+            applyEnableState(checked, switchAllow.isChecked());
+            if (uid > 0) BlockManager.getInstance().registerUid(uid, blockKey);
+            Toast.makeText(requireContext(),
+                    "Restart VPN to apply bypass", Toast.LENGTH_SHORT).show();
+        });
     }
 
     @Override
     public void onStart() {
         super.onStart();
         Dialog d = getDialog();
-        if (d != null) {
-            Window w = d.getWindow();
-            if (w != null) {
-                w.setLayout(
-                        (int) (getResources().getDisplayMetrics().widthPixels * 0.94),
-                        ViewGroup.LayoutParams.WRAP_CONTENT);
-            }
+        if (d != null && d.getWindow() != null) {
+            d.getWindow().setLayout(
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.94),
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
         }
     }
 
     private void reloadSchedules() {
-        if (blockKey == null || blockKey.isEmpty() || scheduleAdapter == null) {
-            if (scheduleAdapter != null) scheduleAdapter.submit(null);
-            return;
-        }
+        if (blockKey == null || scheduleAdapter == null) return;
         ruleRepository.getSchedulesAsync(blockKey, list -> {
             if (getActivity() == null) return;
             getActivity().runOnUiThread(() -> scheduleAdapter.submit(list));
@@ -255,45 +254,35 @@ public class AppDetailDialog extends DialogFragment {
 
     private void showAddScheduleDialog(String packageName) {
         if (packageName == null) return;
-
         View form = LayoutInflater.from(requireContext())
                 .inflate(R.layout.dialog_add_schedule, null, false);
-
         CheckBox dayAll = form.findViewById(R.id.dayAll);
         CheckBox[] days = {
-                form.findViewById(R.id.dayMon),
-                form.findViewById(R.id.dayTue),
-                form.findViewById(R.id.dayWed),
-                form.findViewById(R.id.dayThu),
-                form.findViewById(R.id.dayFri),
-                form.findViewById(R.id.daySat),
+                form.findViewById(R.id.dayMon), form.findViewById(R.id.dayTue),
+                form.findViewById(R.id.dayWed), form.findViewById(R.id.dayThu),
+                form.findViewById(R.id.dayFri), form.findViewById(R.id.daySat),
                 form.findViewById(R.id.daySun)
         };
         EditText editStart = form.findViewById(R.id.editStart);
         EditText editEnd = form.findViewById(R.id.editEnd);
-
         dayAll.setOnCheckedChangeListener((buttonView, isChecked) -> {
             for (CheckBox day : days) {
                 day.setOnCheckedChangeListener(null);
                 day.setChecked(isChecked);
             }
             for (CheckBox day : days) {
-                day.setOnCheckedChangeListener((b, checked) -> syncAllCheckbox(dayAll, days));
+                day.setOnCheckedChangeListener((x, c) -> syncAllCheckbox(dayAll, days));
             }
         });
-
         for (CheckBox day : days) {
-            day.setOnCheckedChangeListener((b, checked) -> syncAllCheckbox(dayAll, days));
+            day.setOnCheckedChangeListener((x, c) -> syncAllCheckbox(dayAll, days));
         }
-
         AlertDialog dialog = new AlertDialog.Builder(requireContext())
                 .setTitle("Add block schedule")
                 .setView(form)
                 .setPositiveButton("Save", (d, w) -> {
                     int mask = 0;
-                    for (int i = 0; i < 7; i++) {
-                        if (days[i].isChecked()) mask |= (1 << i);
-                    }
+                    for (int i = 0; i < 7; i++) if (days[i].isChecked()) mask |= (1 << i);
                     if (mask == 0) {
                         Toast.makeText(requireContext(), "Select at least one day", Toast.LENGTH_SHORT).show();
                         return;
@@ -309,26 +298,21 @@ public class AppDetailDialog extends DialogFragment {
                 })
                 .setNegativeButton("Cancel", null)
                 .create();
-
         dialog.setOnShowListener(d -> spaceDialogButtons(dialog));
         dialog.show();
     }
 
     private void spaceDialogButtons(AlertDialog dialog) {
-        final int gapPx = (int) (12 * requireContext().getResources().getDisplayMetrics().density);
-
+        int gapPx = (int) (12 * requireContext().getResources().getDisplayMetrics().density);
         Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
         Button negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-
         if (positive != null && positive.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
-            ViewGroup.MarginLayoutParams lp =
-                    (ViewGroup.MarginLayoutParams) positive.getLayoutParams();
+            ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) positive.getLayoutParams();
             lp.setMarginStart(gapPx);
             positive.setLayoutParams(lp);
         }
         if (negative != null && negative.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
-            ViewGroup.MarginLayoutParams lp =
-                    (ViewGroup.MarginLayoutParams) negative.getLayoutParams();
+            ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) negative.getLayoutParams();
             lp.setMarginEnd(gapPx);
             negative.setLayoutParams(lp);
         }
@@ -336,12 +320,7 @@ public class AppDetailDialog extends DialogFragment {
 
     private void syncAllCheckbox(CheckBox dayAll, CheckBox[] days) {
         boolean allChecked = true;
-        for (CheckBox day : days) {
-            if (!day.isChecked()) {
-                allChecked = false;
-                break;
-            }
-        }
+        for (CheckBox day : days) if (!day.isChecked()) { allChecked = false; break; }
         dayAll.setOnCheckedChangeListener(null);
         dayAll.setChecked(allChecked);
         dayAll.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -350,7 +329,7 @@ public class AppDetailDialog extends DialogFragment {
                 d.setChecked(isChecked);
             }
             for (CheckBox d : days) {
-                d.setOnCheckedChangeListener((b, checked) -> syncAllCheckbox(dayAll, days));
+                d.setOnCheckedChangeListener((x, c) -> syncAllCheckbox(dayAll, days));
             }
         });
     }

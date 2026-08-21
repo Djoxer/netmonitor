@@ -257,8 +257,57 @@ public class MonitorFragment extends Fragment {
             }
         }
 
-        outAdapter.submit(filterGroups(new ArrayList<>(outMap.values())));
-        inAdapter.submit(filterGroups(new ArrayList<>(inMap.values())));
+        // Pin bypass apps so they stay editable without traffic
+        for (String pkg : BlockManager.getInstance().getBypassPackages()) {
+            if (!outMap.containsKey(pkg)) {
+                outMap.put(pkg, buildBypassPinGroup(pkg, pm));
+            } else {
+                outMap.get(pkg).bypass = true;
+            }
+            if (!inMap.containsKey(pkg)) {
+                inMap.put(pkg, buildBypassPinGroup(pkg, pm));
+            } else {
+                inMap.get(pkg).bypass = true;
+            }
+        }
+
+        List<AppGroup> outList = filterGroups(new ArrayList<>(outMap.values()));
+        List<AppGroup> inList = filterGroups(new ArrayList<>(inMap.values()));
+        sortBypassFirst(outList);
+        sortBypassFirst(inList);
+
+        outAdapter.submit(outList);
+        inAdapter.submit(inList);
+    }
+
+    private AppGroup buildBypassPinGroup(String packageName, PackageManager pm) {
+        AppGroup g = new AppGroup(packageName);
+        g.packageName = packageName;
+        g.bypass = true;
+        g.blockedOut = false;
+        g.blockedIn = false;
+        g.blocked = false;
+        try {
+            ApplicationInfo ai = pm.getApplicationInfo(packageName, 0);
+            g.displayName = pm.getApplicationLabel(ai).toString();
+            g.icon = pm.getApplicationIcon(ai);
+            g.uid = ai.uid;
+            BlockManager.getInstance().registerUid(ai.uid, packageName);
+        } catch (Exception e) {
+            g.displayName = packageName;
+        }
+        return g;
+    }
+
+    private void sortBypassFirst(List<AppGroup> list) {
+        list.sort((a, b) -> {
+            if (a.bypass == b.bypass) {
+                String na = a.displayName != null ? a.displayName : "";
+                String nb = b.displayName != null ? b.displayName : "";
+                return na.compareToIgnoreCase(nb);
+            }
+            return a.bypass ? -1 : 1;
+        });
     }
 
     // ------------------------------------------------------------------
@@ -478,17 +527,26 @@ public class MonitorFragment extends Fragment {
                 : (c.uid > 0 ? "uid:" + c.uid : key);
 
         BlockManager.AppRule rule = BlockManager.getInstance().getRule(blockKey);
-        boolean bypass = rule != null && rule.bypass
+        boolean bypass = (rule != null && rule.bypass)
                 || (c.uid > 0 && BlockManager.getInstance().isBypassUid(c.uid));
+        boolean allowed = rule != null && rule.allowed;
 
         boolean out = BlockManager.getInstance().shouldBlockOutPackage(blockKey)
                 || (c.uid > 0 && BlockManager.getInstance().shouldBlockOut(c.uid));
         boolean in = BlockManager.getInstance().shouldBlockInPackage(blockKey)
                 || (c.uid > 0 && BlockManager.getInstance().shouldBlockIn(c.uid));
 
+        // Global VPN block mode → treat all non-bypass as blocked both ways
+        boolean globalBlock = NetVpnService.isBlockMode();
+        if (globalBlock && !bypass) {
+            out = true;
+            in = true;
+        }
+
         g.bypass = bypass;
-        g.blockedOut = !bypass && out;
-        g.blockedIn = !bypass && in;
+        g.allowed = allowed && !globalBlock;
+        g.blockedOut = !bypass && (globalBlock || (!allowed && out));
+        g.blockedIn = !bypass && (globalBlock || (!allowed && in));
         g.blocked = g.blockedOut || g.blockedIn;
 
         if (c.packageName != null) {

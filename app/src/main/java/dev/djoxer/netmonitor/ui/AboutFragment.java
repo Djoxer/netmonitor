@@ -56,6 +56,13 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.12.0
+            • Profiles with blacklist / whitelist modes
+            • Settings profile dropdown (activate, add, delete, mode)
+            • Allow toggle for whitelist; rules per active profile
+            • Bypass apps pinned on monitor; badge polish
+            • Global block reflects BLOCK on tiles
+            
             v1.11.0
             • Directional block (out / in independent)
             • Per-app VPN bypass (no monitor/log; needs restart)

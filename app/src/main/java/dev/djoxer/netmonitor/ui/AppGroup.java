@@ -23,6 +23,7 @@ public class AppGroup {
     public boolean blockedOut;
     public boolean blockedIn;
     public boolean bypass;
+    public boolean allowed;
 
     public final List<ConnectionInfo> connections = new ArrayList<>();
 

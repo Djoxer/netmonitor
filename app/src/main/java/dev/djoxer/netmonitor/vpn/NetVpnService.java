@@ -125,7 +125,8 @@ public class NetVpnService extends VpnService {
         tcpForwarder = new TcpForwarder(this, tracker, running);
 
         LogWriter.getInstance().start(this);
-        new RuleRepository(this).loadIntoMemoryAsync(null);
+        dev.djoxer.netmonitor.block.ProfileManager.getInstance()
+                .ensureDefaultAndLoadAsync(this, null);
     }
 
     @Override

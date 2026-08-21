@@ -8,10 +8,13 @@ import androidx.room.RoomDatabase;
 
 import dev.djoxer.netmonitor.data.dao.BlockRuleDao;
 import dev.djoxer.netmonitor.data.dao.LogEventDao;
+import dev.djoxer.netmonitor.data.dao.ProfileDao;
 import dev.djoxer.netmonitor.data.dao.ScheduleDao;
 import dev.djoxer.netmonitor.data.dao.TrafficSampleDao;
 import dev.djoxer.netmonitor.data.entity.BlockRuleEntity;
 import dev.djoxer.netmonitor.data.entity.LogEventEntity;
+import dev.djoxer.netmonitor.data.entity.ProfileEntity;
+import dev.djoxer.netmonitor.data.entity.ProfileRuleEntity;
 import dev.djoxer.netmonitor.data.entity.ScheduleEntity;
 import dev.djoxer.netmonitor.data.entity.TrafficSampleEntity;
 
@@ -20,9 +23,11 @@ import dev.djoxer.netmonitor.data.entity.TrafficSampleEntity;
                 BlockRuleEntity.class,
                 ScheduleEntity.class,
                 LogEventEntity.class,
-                TrafficSampleEntity.class
+                TrafficSampleEntity.class,
+                ProfileEntity.class,
+                ProfileRuleEntity.class
         },
-        version = 3,
+        version = 4,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -33,6 +38,7 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract ScheduleDao scheduleDao();
     public abstract LogEventDao logEventDao();
     public abstract TrafficSampleDao trafficSampleDao();
+    public abstract ProfileDao profileDao();
 
     public static AppDatabase getInstance(Context context) {
         if (INSTANCE == null) {
