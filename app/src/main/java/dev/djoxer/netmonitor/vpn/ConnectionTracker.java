@@ -88,12 +88,6 @@ public class ConnectionTracker {
         if (ip == null) return;
         if (ip.protocol != 6 && ip.protocol != 17) return;
 
-        if (ip.version == 6) {
-            bytesIpv6.addAndGet(length);
-        } else {
-            bytesIpv4.addAndGet(length);
-        }
-
         String protoName = ip.protocol == 6 ? "TCP" : "UDP";
         int osProto = ip.protocol == 6
                 ? android.system.OsConstants.IPPROTO_TCP
@@ -125,7 +119,6 @@ public class ConnectionTracker {
 
         if (ip.version == 4 && remoteIp.startsWith("10.0.0.")) return;
         if (ip.version == 6 && remoteIp.startsWith("fd00:1:fd00:1:")) return;
-
         if (remoteIp.startsWith(TUN_PREFIX)) return;
 
         String key = protoName + "|" + localPort + "|" + remoteIp + "|" + remotePort;
@@ -143,12 +136,11 @@ public class ConnectionTracker {
                 }
             }
 
+            // Presence only – byte counters come from successful forward
             if (inbound) {
                 info.seenIn = true;
-                info.bytesIn += length;
             } else {
                 info.seenOut = true;
-                info.bytesOut += length;
             }
 
             if (info.hostname == null) {

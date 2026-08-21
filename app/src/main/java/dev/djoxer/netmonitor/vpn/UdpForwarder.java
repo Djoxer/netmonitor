@@ -132,7 +132,13 @@ public class UdpForwarder {
             session.socket.send(new DatagramPacket(payload, payload.length));
             session.touch();
             tracker.udpForwarded.incrementAndGet();
-
+            tracker.addForwardedTraffic(
+                    "UDP",
+                    srcPort,
+                    remoteIp,
+                    dstPort,
+                    payloadLen,
+                    false);
         } catch (Exception e) {
             Log.w(TAG, "UDP handle error", e);
         }

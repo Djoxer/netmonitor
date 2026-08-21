@@ -168,6 +168,13 @@ public class TcpForwarder {
                 session.out.write(payload);
                 session.out.flush();
                 tracker.tcpForwarded.addAndGet(payloadLen);
+                tracker.addForwardedTraffic(
+                        "TCP",
+                        session.clientPort,
+                        remoteIp,
+                        session.remotePort,
+                        payloadLen,
+                        false);
                 session.clientSeq = seq + payloadLen;
             } else {
                 session.clientSeq = Math.max(session.clientSeq, seq);

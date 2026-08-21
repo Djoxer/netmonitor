@@ -56,6 +56,10 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.12.2
+            • Tiles and console speed count forwarded traffic only
+            • Blocked attempts no longer show fake data movement
+            
             v1.12.1
             • Tab icons only; About/Settings order swap
             • Header theme toggle + centered session timer
