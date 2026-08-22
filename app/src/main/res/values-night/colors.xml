@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="md_theme_primary">#81C784</color>
+    <color name="md_theme_primary">#2E7D32</color>
     <color name="md_theme_on_primary">#003910</color>
     <color name="md_theme_secondary">#90CAF9</color>
     <color name="md_theme_background">#121212</color>
@@ -12,7 +12,9 @@
     <color name="status_block">#FF5722</color>
     <color name="status_stopped">#F44336</color>
     <color name="bar_ipv4">#2196F3</color>
-    <color name="bar_ipv6">#4CAF50</color>
+    <color name="bar_ipv6">#2E7D32</color>
     <color name="console_text">#00FF00</color>
     <color name="console_background">#000000</color>
+    <color name="profile_dropdown_bg">#FF3A3A3A</color>
+    <color name="profile_active">#81C784</color>
 </resources>

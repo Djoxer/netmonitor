@@ -1,83 +1,84 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/md_theme_background"
-    android:padding="16dp">
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        android:background="@color/md_theme_background"
+        android:padding="16dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Block mode -->
         <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Profiles"
-            android:textColor="@color/md_theme_primary"
-            android:textStyle="bold"
-            android:textSize="16sp"
-            android:paddingBottom="4dp" />
-
-        <TextView
-            android:id="@+id/activeProfileLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Active: -"
-            android:textColor="@color/md_theme_on_surface_variant"
-            android:textSize="13sp"
-            android:paddingBottom="8dp" />
-
-        <Spinner
-            android:id="@+id/profileSpinner"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:paddingBottom="8dp" />
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Block mode"
+                android:textColor="@color/md_theme_primary"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:paddingBottom="4dp" />
 
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingBottom="8dp">
-
-            <Button
-                android:id="@+id/btnProfileBlacklist"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="Mode: Blacklist" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingBottom="12dp">
 
-            <Button
-                android:id="@+id/btnProfileWhitelist"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:text="Mode: Whitelist" />
+            <TextView
+                    android:id="@+id/blockModeLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="engine: blacklist"
+                    android:textColor="@color/md_theme_on_surface"
+                    android:textSize="14sp" />
+
+            <Switch
+                    android:id="@+id/switchBlockMode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
         </LinearLayout>
 
+        <!-- Profiles -->
+        <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Profiles"
+                android:textColor="@color/md_theme_primary"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:paddingBottom="4dp" />
+
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingBottom="16dp">
-
-            <Button
-                android:id="@+id/btnAddProfile"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="Add profile" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingBottom="16dp">
 
-            <Button
-                android:id="@+id/btnDeleteProfile"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:text="Delete active" />
+            <Spinner
+                    android:id="@+id/profileSpinner"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:background="@color/profile_dropdown_bg"
+                    android:popupBackground="@color/profile_dropdown_bg" />
+
+            <ImageButton
+                    android:id="@+id/btnAddProfile"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_profile_add"
+                    android:scaleType="centerInside"
+                    android:padding="8dp"
+                    android:contentDescription="Add profile"
+                    app:tint="@color/md_theme_on_surface" />
         </LinearLayout>
 
         <TextView

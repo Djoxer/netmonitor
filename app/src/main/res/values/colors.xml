@@ -15,4 +15,6 @@
     <color name="bar_ipv6">#2E7D32</color>
     <color name="console_text">#DEE9FA</color>
     <color name="console_background">#012456</color>
+    <color name="profile_dropdown_bg">#FFFFFFFF</color>
+    <color name="profile_active">#2E7D32</color>
 </resources>

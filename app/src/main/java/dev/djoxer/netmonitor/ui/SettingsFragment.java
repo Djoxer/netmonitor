@@ -11,15 +11,19 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.Spinner;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import java.util.ArrayList;
@@ -39,12 +43,15 @@ public class SettingsFragment extends Fragment {
     private RuleRepository ruleRepository;
     private LogExporter logExporter;
     private TextView status;
-    private TextView activeProfileLabel;
+    private TextView blockModeLabel;
+    private Switch switchBlockMode;
     private Spinner profileSpinner;
+    private ImageButton btnAddProfile;
 
     private final List<ProfileEntity> profileList = new ArrayList<>();
     private long selectedProfileId = -1L;
     private boolean suppressSpinnerCallback = false;
+    private boolean suppressModeSwitch = false;
 
     private static final long SEVEN_DAYS_MS = 7L * 24 * 60 * 60 * 1000;
 
@@ -61,8 +68,10 @@ public class SettingsFragment extends Fragment {
         ruleRepository = new RuleRepository(requireContext());
         logExporter = new LogExporter(requireContext());
         status = view.findViewById(R.id.settingsStatus);
-        activeProfileLabel = view.findViewById(R.id.activeProfileLabel);
+        blockModeLabel = view.findViewById(R.id.blockModeLabel);
+        switchBlockMode = view.findViewById(R.id.switchBlockMode);
         profileSpinner = view.findViewById(R.id.profileSpinner);
+        btnAddProfile = view.findViewById(R.id.btnAddProfile);
 
         Button btnClearLog = view.findViewById(R.id.btnClearLog);
         Button btnDeleteOld = view.findViewById(R.id.btnDeleteOldLogs);
@@ -71,19 +80,13 @@ public class SettingsFragment extends Fragment {
         Button btnClearBlocks = view.findViewById(R.id.btnClearPermanentBlocks);
         Button btnClearSchedules = view.findViewById(R.id.btnClearSchedules);
         Button btnReload = view.findViewById(R.id.btnReloadRules);
-        Button btnAddProfile = view.findViewById(R.id.btnAddProfile);
-        Button btnDeleteProfile = view.findViewById(R.id.btnDeleteProfile);
-        Button btnModeBlacklist = view.findViewById(R.id.btnProfileBlacklist);
-        Button btnModeWhitelist = view.findViewById(R.id.btnProfileWhitelist);
 
         RadioGroup themeGroup = view.findViewById(R.id.themeGroup);
         RadioButton themeSystem = view.findViewById(R.id.themeSystem);
         RadioButton themeLight = view.findViewById(R.id.themeLight);
         RadioButton themeDark = view.findViewById(R.id.themeDark);
 
-        // Prevent listener during initial bind
-        final boolean[] themeReady = { false };
-
+        final boolean[] themeReady = {false};
         themeGroup.setOnCheckedChangeListener(null);
         int mode = ThemePrefs.getMode(requireContext());
         if (mode == ThemePrefs.MODE_LIGHT) themeLight.setChecked(true);
@@ -92,15 +95,11 @@ public class SettingsFragment extends Fragment {
 
         themeGroup.setOnCheckedChangeListener((group, checkedId) -> {
             if (!themeReady[0] || !isAdded()) return;
-
             int newMode = ThemePrefs.MODE_DARK;
             if (checkedId == R.id.themeLight) newMode = ThemePrefs.MODE_LIGHT;
             else if (checkedId == R.id.themeSystem) newMode = ThemePrefs.MODE_SYSTEM;
-
             ThemePrefs.setMode(requireContext(), newMode);
         });
-
-        // Enable only after first layout pass (avoids restore firing)
         themeGroup.post(() -> themeReady[0] = true);
 
         btnClearLog.setOnClickListener(v -> confirm(
@@ -133,29 +132,34 @@ public class SettingsFragment extends Fragment {
                     uiDone("Rules reloaded into memory.");
                 }));
 
-        btnAddProfile.setOnClickListener(v -> showAddProfileDialog());
-        btnDeleteProfile.setOnClickListener(v -> confirm(
-                "Delete active profile?",
-                "Rules for this profile will be removed.",
-                () -> {
-                    long id = selectedProfileId;
-                    if (id < 0) return;
-                    ProfileManager.getInstance().deleteProfileAsync(requireContext(), id, () -> {
-                        if (getActivity() == null) return;
-                        getActivity().runOnUiThread(() -> {
-                            reloadProfilesUi();
-                            toastVpnRestartIfNeeded();
-                            uiDone("Profile deleted.");
-                        });
-                    });
-                }));
+        if (btnAddProfile != null) {
+            btnAddProfile.setOnClickListener(v -> showAddProfileDialog());
+        }
 
-        btnModeBlacklist.setOnClickListener(v -> setActiveMode(ProfileEntity.MODE_BLACKLIST));
-        btnModeWhitelist.setOnClickListener(v -> setActiveMode(ProfileEntity.MODE_WHITELIST));
+        if (switchBlockMode != null) {
+            switchBlockMode.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (suppressModeSwitch || !isAdded()) return;
+                if (selectedProfileId < 0) return;
+                int newMode = isChecked
+                        ? ProfileEntity.MODE_WHITELIST
+                        : ProfileEntity.MODE_BLACKLIST;
+                ProfileManager.getInstance().setProfileModeAsync(
+                        requireContext(), selectedProfileId, newMode, () -> {
+                            if (getActivity() == null) return;
+                            getActivity().runOnUiThread(() -> {
+                                updateBlockModeUi();
+                                reloadProfilesUi();
+                                uiDone(isChecked
+                                        ? "Active profile: Whitelist"
+                                        : "Active profile: Blacklist");
+                            });
+                        });
+            });
+        }
 
         profileSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
                 if (suppressSpinnerCallback) return;
                 if (position < 0 || position >= profileList.size()) return;
                 ProfileEntity p = profileList.get(position);
@@ -187,6 +191,19 @@ public class SettingsFragment extends Fragment {
         reloadProfilesUi();
     }
 
+    private void updateBlockModeUi() {
+        if (!isAdded()) return;
+        boolean whitelist = BlockManager.getInstance().isWhitelistMode();
+        if (blockModeLabel != null) {
+            blockModeLabel.setText(whitelist ? "engine: whitelist" : "engine: blacklist");
+        }
+        if (switchBlockMode != null) {
+            suppressModeSwitch = true;
+            switchBlockMode.setChecked(whitelist);
+            suppressModeSwitch = false;
+        }
+    }
+
     private void reloadProfilesUi() {
         if (!isAdded() || profileSpinner == null) return;
         Context ctx = getContext();
@@ -212,51 +229,59 @@ public class SettingsFragment extends Fragment {
         if (profiles != null) profileList.addAll(profiles);
         selectedProfileId = activeId;
 
-        List<String> labels = new ArrayList<>();
         int selectedIndex = 0;
-        String activeName = "-";
         for (int i = 0; i < profileList.size(); i++) {
-            ProfileEntity p = profileList.get(i);
-            String modeLabel = p.mode == ProfileEntity.MODE_WHITELIST ? "whitelist" : "blacklist";
-            labels.add(p.name + " (" + modeLabel + ")");
-            if (p.id == activeId) {
+            if (profileList.get(i).id == activeId) {
                 selectedIndex = i;
-                activeName = p.name + " · " + modeLabel;
+                break;
             }
         }
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                ctx,
-                android.R.layout.simple_spinner_item,
-                labels);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-
+        ProfileSpinnerAdapter adapter = new ProfileSpinnerAdapter(ctx, profileList, activeId);
         suppressSpinnerCallback = true;
         profileSpinner.setAdapter(adapter);
-        if (!labels.isEmpty()) {
+        if (!profileList.isEmpty()) {
             profileSpinner.setSelection(selectedIndex, false);
         }
         suppressSpinnerCallback = false;
 
-        if (activeProfileLabel != null) {
-            activeProfileLabel.setText("Active: " + activeName
-                    + (BlockManager.getInstance().isWhitelistMode()
-                    ? " (engine: whitelist)" : " (engine: blacklist)"));
-        }
+        updateBlockModeUi();
     }
 
-    private void setActiveMode(int mode) {
-        if (selectedProfileId < 0) return;
-        ProfileManager.getInstance().setProfileModeAsync(
-                requireContext(), selectedProfileId, mode, () -> {
-                    if (getActivity() == null) return;
-                    getActivity().runOnUiThread(() -> {
-                        reloadProfilesUi();
-                        uiDone(mode == ProfileEntity.MODE_WHITELIST
-                                ? "Active profile: Whitelist"
-                                : "Active profile: Blacklist");
-                    });
-                });
+    private boolean isDefaultProfile(ProfileEntity p) {
+        return p != null && p.name != null && p.name.equalsIgnoreCase("Default");
+    }
+
+    private void onDeleteProfile(ProfileEntity p) {
+        if (p == null || isDefaultProfile(p)) return;
+        confirm(
+                "Delete profile?",
+                "Delete \"" + p.name + "\" and its rules?",
+                () -> ProfileManager.getInstance().deleteProfileAsync(
+                        requireContext(), p.id, () -> {
+                            if (getActivity() == null) return;
+                            getActivity().runOnUiThread(() -> {
+                                reloadProfilesUi();
+                                toastVpnRestartIfNeeded();
+                                uiDone("Profile deleted.");
+                            });
+                        }));
+    }
+
+    private void onResetDefault(ProfileEntity p) {
+        if (p == null) return;
+        confirm(
+                "Reset Default profile?",
+                "All rules on Default will be cleared.",
+                () -> ProfileManager.getInstance().resetProfileAsync(
+                        requireContext(), p.id, () -> {
+                            if (getActivity() == null) return;
+                            getActivity().runOnUiThread(() -> {
+                                reloadProfilesUi();
+                                toastVpnRestartIfNeeded();
+                                uiDone("Default profile reset.");
+                            });
+                        }));
     }
 
     private void showAddProfileDialog() {
@@ -294,6 +319,35 @@ public class SettingsFragment extends Fragment {
                 })
                 .setNegativeButton("Cancel", null)
                 .create();
+
+        dialog.setOnShowListener(d -> {
+            final int gapPx = (int) (16 * getResources().getDisplayMetrics().density);
+            Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Button negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+            int outline = ContextCompat.getColor(requireContext(), R.color.md_theme_outline);
+            int onSurface = ContextCompat.getColor(requireContext(), R.color.md_theme_on_surface);
+
+            if (positive != null) {
+                ViewGroup.MarginLayoutParams lp =
+                        (ViewGroup.MarginLayoutParams) positive.getLayoutParams();
+                lp.setMarginStart(gapPx);
+                positive.setLayoutParams(lp);
+                positive.setTextColor(onSurface);
+                if (positive.getBackground() != null) {
+                    positive.getBackground().setTint(outline);
+                }
+            }
+            if (negative != null) {
+                ViewGroup.MarginLayoutParams lp =
+                        (ViewGroup.MarginLayoutParams) negative.getLayoutParams();
+                lp.setMarginEnd(gapPx);
+                negative.setLayoutParams(lp);
+                negative.setTextColor(onSurface);
+                if (negative.getBackground() != null) {
+                    negative.getBackground().setTint(outline);
+                }
+            }
+        });
         dialog.show();
     }
 
@@ -306,7 +360,7 @@ public class SettingsFragment extends Fragment {
     }
 
     private void export(LogExporter.Format format) {
-        status.setText("Exporting…");
+        if (status != null) status.setText("Exporting…");
         logExporter.exportAsync(format, new LogExporter.Callback() {
             @Override
             public void onSuccess(Intent shareIntent) {
@@ -314,11 +368,15 @@ public class SettingsFragment extends Fragment {
                 getActivity().runOnUiThread(() -> {
                     try {
                         startActivity(shareIntent);
-                        status.setText(format == LogExporter.Format.CSV
-                                ? "CSV export ready."
-                                : "JSON export ready.");
+                        if (status != null) {
+                            status.setText(format == LogExporter.Format.CSV
+                                    ? "CSV export ready."
+                                    : "JSON export ready.");
+                        }
                     } catch (Exception e) {
-                        status.setText("Share failed: " + e.getMessage());
+                        if (status != null) {
+                            status.setText("Share failed: " + e.getMessage());
+                        }
                         Toast.makeText(requireContext(), "Share failed", Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -328,7 +386,7 @@ public class SettingsFragment extends Fragment {
             public void onError(String message) {
                 if (getActivity() == null) return;
                 getActivity().runOnUiThread(() -> {
-                    status.setText("Export error: " + message);
+                    if (status != null) status.setText("Export error: " + message);
                     Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
                 });
             }
@@ -370,5 +428,84 @@ public class SettingsFragment extends Fragment {
             if (status != null) status.setText(msg);
             Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show();
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Spinner adapter: active = green check, Default = reset, else trash
+    // ------------------------------------------------------------------
+
+    private final class ProfileSpinnerAdapter extends ArrayAdapter<ProfileEntity> {
+
+        private final long activeId;
+        private final LayoutInflater inflater;
+
+        ProfileSpinnerAdapter(Context context, List<ProfileEntity> data, long activeId) {
+            super(context, 0, data);
+            this.activeId = activeId;
+            this.inflater = LayoutInflater.from(context);
+        }
+
+        @NonNull
+        @Override
+        public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+            if (convertView == null) {
+                convertView = inflater.inflate(R.layout.item_profile_spinner, parent, false);
+            }
+            TextView tv = convertView.findViewById(R.id.profileSpinnerText);
+            ImageView check = convertView.findViewById(R.id.profileSpinnerCheck);
+            ProfileEntity p = getItem(position);
+            if (tv != null && p != null) {
+                String modeLabel = p.mode == ProfileEntity.MODE_WHITELIST
+                        ? "whitelist" : "blacklist";
+                tv.setText(p.name + " (" + modeLabel + ")");
+                boolean active = p.id == activeId;
+                tv.setTextColor(ContextCompat.getColor(getContext(),
+                        active ? R.color.profile_active : R.color.md_theme_on_surface));
+                if (check != null) {
+                    check.setVisibility(active ? View.VISIBLE : View.GONE);
+                }
+            }
+            return convertView;
+        }
+
+        @Override
+        public View getDropDownView(int position, @Nullable View convertView,
+                                    @NonNull ViewGroup parent) {
+            if (convertView == null) {
+                convertView = inflater.inflate(R.layout.item_profile_dropdown, parent, false);
+            }
+            TextView name = convertView.findViewById(R.id.profileName);
+            ImageView action = convertView.findViewById(R.id.profileAction);
+            ProfileEntity p = getItem(position);
+            if (p == null) return convertView;
+
+            String modeLabel = p.mode == ProfileEntity.MODE_WHITELIST
+                    ? "whitelist" : "blacklist";
+            name.setText(p.name + " (" + modeLabel + ")");
+
+            boolean active = p.id == activeId;
+            boolean isDefault = isDefaultProfile(p);
+
+            // Default always offers reset (even when active)
+            if (isDefault) {
+                name.setTextColor(ContextCompat.getColor(getContext(),
+                        active ? R.color.profile_active : R.color.md_theme_on_surface));
+                action.setImageResource(R.drawable.ic_profile_reset);
+                action.setClickable(true);
+                action.setOnClickListener(v -> onResetDefault(p));
+            } else if (active) {
+                name.setTextColor(ContextCompat.getColor(getContext(), R.color.profile_active));
+                action.setImageResource(R.drawable.ic_profile_check);
+                action.setOnClickListener(null);
+                action.setClickable(false);
+            } else {
+                name.setTextColor(ContextCompat.getColor(getContext(), R.color.md_theme_on_surface));
+                action.setImageResource(R.drawable.ic_profile_trash);
+                action.setClickable(true);
+                action.setOnClickListener(v -> onDeleteProfile(p));
+            }
+
+            return convertView;
+        }
     }
 }

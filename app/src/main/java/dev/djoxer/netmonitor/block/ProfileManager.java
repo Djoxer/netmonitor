@@ -210,6 +210,18 @@ public class ProfileManager {
         });
     }
 
+    public void resetProfileAsync(Context context, long profileId, Callback done) {
+        final Context app = context.getApplicationContext();
+        IO.execute(() -> {
+            AppDatabase db = AppDatabase.getInstance(app);
+            db.profileDao().deleteRulesForProfile(profileId);
+            if (getActiveProfileId(app) == profileId) {
+                applyActiveProfileLocked(app);
+            }
+            if (done != null) done.onDone();
+        });
+    }
+
     public void setProfileModeAsync(Context context, long profileId, int mode, Callback done) {
         final Context app = context.getApplicationContext();
         IO.execute(() -> {

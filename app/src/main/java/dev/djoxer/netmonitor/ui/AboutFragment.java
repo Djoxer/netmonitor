@@ -56,6 +56,10 @@ public class AboutFragment extends Fragment {
      */
     private static final String HISTORY = """
             \
+            v1.12.3
+            • Settings: block-mode switch, compact profile dropdown
+            • Per-profile delete / Default reset icons
+            
             v1.12.2
             • Tiles and console speed count forwarded traffic only
             • Blocked attempts no longer show fake data movement
